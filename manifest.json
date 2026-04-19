@@ -1,26 +1,23 @@
 {
-  "background_color": "#ffffff",
-  "dir": "ltr",
-  "display": "standalone",
   "name": "Birds Retail Audit",
-  "orientation": "any",
-  "scope": "/",
-  "short_name": "blakelowis.github",
-  "start_url": "/https://blakelowis.github.io/bids-audit-app/",
+  "short_name": "BirdsAudit",
+  "description": "Mobile-optimized retail auditing tool with charcoal-green high contrast design.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0f14",
   "theme_color": "#14532d",
   "icons": [
     {
-      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMDI4NGM3Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGVhNWU5Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNjAiIGZpbGw9InVybCgjZykiLz48cGF0aCBkPSJNMzggNzBjMTItMTYgMjQtMjQgNDYtMjAgMCAwLTEwIDEwLTE4IDE4LTYgNiAzIDE5IDEzIDEyIDAgMCAxMC0xMCAxNi04IDAgMC03IDE2LTcgMjQgMCAwLTEzIDQtMjItMy04LTctMTQtMTgtMTAtMzItOCA3LTE4IDYtMTggNnMtMyAxMiAwIDEzeiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==",
-      "isSquare": false,
-      "isPng": false,
-      "isWebp": false,
-      "isJpg": false,
-      "width": 0,
-      "is512x512": false,
-      "is256x256": false,
-      "is192x192": false
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "maskable_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ],
-  "id": "Birds Retail Audit",
-  "description": "Retail  audit app"
+  ]
 }
