@@ -1,0 +1,17 @@
+{
+  "name": "Birds Retail Audit",
+  "short_name": "BirdsAudit",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#14532d",
+  "description": "Mobile-optimized retail auditing tool with charcoal-green high contrast design.",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
