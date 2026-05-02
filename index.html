@@ -64,7 +64,6 @@
     .card { background: white; border-radius: 1.25rem; border: 1px solid #E2E8F0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.03), 0 4px 6px -4px rgba(0,0,0,0.02); transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); }
     
-    /* New Horizontal Layout Helpers */
     .landscape-container { display: flex; flex-direction: column; gap: 1.5rem; }
     @media (min-width: 1024px) {
         .landscape-container { flex-direction: row; align-items: start; }
@@ -72,7 +71,6 @@
         .landscape-right { width: 45%; }
     }
 
-    /* Used during Export and on Wide Screens to force the side-by-side view */
     .export-force-landscape { width: 1400px !important; padding: 2.5rem !important; }
     .export-force-landscape .landscape-container { flex-direction: row !important; }
     .export-force-landscape .landscape-left { width: 55% !important; }
@@ -1109,13 +1107,13 @@ async function renderDashboard(){
           <div class="landscape-container">
             <!-- Left Side: Commercial & KPIs -->
             <div class="landscape-left">
-              <div class="grid grid-cols-3 md:grid-cols-6 gap-3 bg-slate-50 border border-slate-100 p-4 rounded-2xl mb-6 shadow-inner">
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">Sales</small><div class="text-lg font-black text-slate-800">${(avgK('Sales')*100).toFixed(1)}%</div>${getTrendStr(avgK('Sales'), pAvgK('Sales'), false, 'percent')}</div>
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">Product</small><div class="text-lg font-black text-slate-800">${(avgK('Product')*100).toFixed(1)}%</div>${getTrendStr(avgK('Product'), pAvgK('Product'), false, 'percent')}</div>
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">Waste</small><div class="text-lg font-black text-slate-800">${(avgK('Waste')*100).toFixed(1)}%</div>${getTrendStr(avgK('Waste'), pAvgK('Waste'), true, 'percent')}</div>
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">Labour</small><div class="text-lg font-black text-slate-800">${(avgK('Labour')*100).toFixed(1)}%</div>${getTrendStr(avgK('Labour'), pAvgK('Labour'), true, 'percent')}</div>
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">ATV</small><div class="text-lg font-black text-slate-800">£${(avgK('ATV')).toFixed(2)}</div>${getTrendStr(avgK('ATV'), pAvgK('ATV'), false, 'currency')}</div>
-                 <div class="text-center"><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
+              <div class="grid grid-cols-3 md:grid-cols-6 gap-3 bg-slate-50 border border-slate-100 p-4 rounded-2xl mb-6 shadow-inner text-center">
+                 <div><small class="muted uppercase font-bold text-[10px]">Sales</small><div class="text-lg font-black text-slate-800">${(avgK('Sales')*100).toFixed(1)}%</div>${getTrendStr(avgK('Sales'), pAvgK('Sales'), false, 'percent')}</div>
+                 <div><small class="muted uppercase font-bold text-[10px]">Product</small><div class="text-lg font-black text-slate-800">${(avgK('Product')*100).toFixed(1)}%</div>${getTrendStr(avgK('Product'), pAvgK('Product'), false, 'percent')}</div>
+                 <div><small class="muted uppercase font-bold text-[10px]">Waste</small><div class="text-lg font-black text-slate-800">${(avgK('Waste')*100).toFixed(1)}%</div>${getTrendStr(avgK('Waste'), pAvgK('Waste'), true, 'percent')}</div>
+                 <div><small class="muted uppercase font-bold text-[10px]">Labour</small><div class="text-lg font-black text-slate-800">${(avgK('Labour')*100).toFixed(1)}%</div>${getTrendStr(avgK('Labour'), pAvgK('Labour'), true, 'percent')}</div>
+                 <div><small class="muted uppercase font-bold text-[10px]">ATV</small><div class="text-lg font-black text-slate-800">£${(avgK('ATV')).toFixed(2)}</div>${getTrendStr(avgK('ATV'), pAvgK('ATV'), false, 'currency')}</div>
+                 <div><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
               </div>
 
               <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}">
@@ -1145,12 +1143,18 @@ async function renderDashboard(){
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Birds Focus</span><span class="${sFocus<90?'text-red-500':sFocus<95?'text-amber-500':''}">${sFocus.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sFocus)}" style="width:${sFocus}%"></div></div></div>
               </div>
 
-              <div class="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3">
-                <div class="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center font-bold text-emerald-600">💡</div>
-                <div>
-                   <h5 class="text-xs font-bold text-emerald-800 mb-1">Area Manager Note</h5>
-                   <p class="text-[11px] text-emerald-700 leading-tight">Current period performance shows <b>${am}</b> maintaining network-leading standards in operational compliance while driving top-tier commercial growth.</p>
+              <!-- UPDATED EDITABLE & OPTIONAL NOTE BOX -->
+              <div class="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3 relative group">
+                <div class="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center font-bold text-emerald-600 shrink-0">💡</div>
+                <div class="flex-1">
+                   <h5 contenteditable="true" class="text-xs font-black text-emerald-900 mb-1 outline-none border-b border-dashed border-emerald-200 focus:border-emerald-400 focus:bg-white pr-6 transition-all">
+                     Area Manager Note
+                   </h5>
+                   <p contenteditable="true" class="text-[11px] text-emerald-800 leading-tight outline-none focus:bg-white focus:ring-1 focus:ring-emerald-300 p-1 rounded cursor-text italic transition-all">
+                     Current period performance shows <b>${am}</b> maintaining network-leading standards in operational compliance while driving top-tier commercial growth.
+                   </p>
                 </div>
+                <button onclick="this.parentElement.remove()" class="export-btn absolute -top-2 -right-2 bg-white border border-red-100 text-red-400 hover:text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-[12px] shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
               </div>
             </div>
           </div>
@@ -1168,151 +1172,77 @@ async function renderDashboard(){
   }
 
   if(currentView === 'winners'){
+    const prevByAM = {};
+    prev.forEach(p=>{ if(!prevByAM[p.AM]) prevByAM[p.AM]={total:0,count:0}; prevByAM[p.AM].total += p.Sales; prevByAM[p.AM].count++; });
+    const improvedArea = amStatsGlobal.map(a=>{
+      const prevAvg = prevByAM[a.am] ? prevByAM[a.am].total/prevByAM[a.am].count : 0;
+      return {name:a.am, change:(a.sAvg - prevAvg)};
+    }).sort((a,b)=>b.change-a.change)[0];
 
-const prevByAM = {};
-prev.forEach(p=>{ if(!prevByAM[p.AM]) prevByAM[p.AM]={total:0,count:0}; prevByAM[p.AM].total += p.Sales; prevByAM[p.AM].count++; });
-const improvedArea = amStatsGlobal.map(a=>{
-  const prevAvg = prevByAM[a.am] ? prevByAM[a.am].total/prevByAM[a.am].count : 0;
-  return {name:a.am, change:(a.sAvg - prevAvg)};
-}).sort((a,b)=>b.change-a.change)[0];
-
-const improvedAreaHtml = `
-<div class="card p-4 text-center mb-4">
-  <h4 class="text-xs font-black muted uppercase mb-1">🚀 Most Improved Area</h4>
-  <div class="text-base font-black birds-green">🥇 ${improvedArea?.name || '-'}</div>
-  <div class="text-xs text-emerald-600 font-bold">+${((improvedArea?.change||0)*100).toFixed(1)}%</div>
-  <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">Sales vs Prior Period</div>
-</div>`;
-
-const prevByStore = new Map(prev.map(p=>[p.Branch, p.Sales]));
-const improvedStore = curr.map(c=>{
-  const p = prevByStore.get(c.Branch) || 0;
-  return {name: c.Branch, change: (c.Sales - p)};
-}).sort((a,b)=>b.change-a.change)[0];
-
-const improvedStoreHtml = `
-<div class="card p-4 text-center mb-6">
-  <h4 class="text-xs font-black muted uppercase mb-1">🏬 Most Improved Store</h4>
-  <div class="text-base font-black birds-green">🥇 ${improvedStore?.name || '-'}</div>
-  <div class="text-xs text-emerald-600 font-bold">+${((improvedStore?.change||0)*100).toFixed(1)}%</div>
-  <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">Sales vs Prior Period</div>
-</div>`;
+    const improvedAreaHtml = `<div class="card p-4 text-center mb-4"><h4 class="text-xs font-black muted uppercase mb-1">🚀 Most Improved Area</h4><div class="text-base font-black birds-green">🥇 ${improvedArea?.name || '-'}</div><div class="text-xs text-emerald-600 font-bold">+${((improvedArea?.change||0)*100).toFixed(1)}%</div></div>`;
 
     const rankMetric = (metric, asc) => [...amStatsGlobal].sort((a,b) => asc ? a[metric] - b[metric] : b[metric] - a[metric]).slice(0,3);
     const buildSubPodium = (title, metric, asc, fmt, displayMode) => {
       const ranked = rankMetric(metric, asc);
       const formatVal = (val) => {
-        if (displayMode === 'currency') return '£' + (val || 0).toLocaleString(undefined, { minimumFractionDigits: fmt, maximumFractionDigits: fmt });
-        if (displayMode === 'energy') return (val || 0).toFixed(fmt);
-        if (displayMode === 'audit') return (val || 0).toFixed(fmt) + '%';
+        if (displayMode === 'currency') return '£' + (val || 0).toFixed(2);
         return ((val || 0) * 100).toFixed(fmt) + '%';
       };
-      
-      const safeName = (amName) => amName ? amName.split(' ')[0] : '—';
-
       return `
-        <div class="card p-4 text-center hover:shadow-md transition-shadow">
+        <div class="card p-4 text-center">
           <h4 class="text-xs font-black muted uppercase mb-3">${title}</h4>
           <div class="flex justify-between items-end gap-2">
-            <div class="flex-1 text-[10px]"><b>2nd</b><br><span class="font-bold text-slate-800">${safeName(ranked[1]?.am)}</span><br>${formatVal(ranked[1]?.[metric])}</div>
-            <div class="flex-1 text-[11px] pb-1 border-b-2 border-birds-green">👑 <b>1st</b><br><span class="font-black birds-green">${safeName(ranked[0]?.am)}</span><br>${formatVal(ranked[0]?.[metric])}</div>
-            <div class="flex-1 text-[10px]"><b>3rd</b><br><span class="font-bold text-slate-800">${safeName(ranked[2]?.am)}</span><br>${formatVal(ranked[2]?.[metric])}</div>
+            <div class="flex-1 text-[10px]"><b>2nd</b><br>${ranked[1]?.am || '—'}<br>${formatVal(ranked[1]?.[metric])}</div>
+            <div class="flex-1 text-[11px] pb-1 border-b-2 border-birds-green">👑 <b>1st</b><br>${ranked[0]?.am || '—'}<br>${formatVal(ranked[0]?.[metric])}</div>
+            <div class="flex-1 text-[10px]"><b>3rd</b><br>${ranked[2]?.am || '—'}<br>${formatVal(ranked[2]?.[metric])}</div>
           </div>
         </div>`;
     };
 
     document.getElementById('mainView').innerHTML = `
-      <div id="winners-card" class="pb-2">${improvedAreaHtml}${improvedStoreHtml}
-        <div class="card p-8 mb-6 text-center relative overflow-hidden">
-          <div onclick="exportCard('winners-card', 'Podium')" class="export-btn absolute top-4 right-4 bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm z-10">📸 Export</div>
-          <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-600"></div>
-          <h2 class="font-black outfit birds-green text-2xl mb-2 mt-2">COMBINED AREA PODIUM</h2>
-          <p class="text-xs text-slate-500 mb-8 max-w-lg mx-auto">Ranked by combined composite score across Sales, Product, Waste, Labour, and Energy.</p>
+      <div id="winners-card" class="pb-2">
+        ${improvedAreaHtml}
+        <div class="card p-8 mb-6 text-center relative">
+          <h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2>
           <div class="flex items-end gap-4 justify-center">
-            <div class="card p-4 h-32 flex-1 text-center border border-slate-200"><b>2nd</b><br><small class="font-bold text-sm">${amStatsGlobal[1]?.am || '—'}</small></div>
-            <div class="card p-6 h-48 flex-1 text-center winner-1st shadow-lg">👑 <b>1st Overall</b><br><b class="text-xl">${amStatsGlobal[0]?.am || '—'}</b><br><span class="birds-green font-black text-xl tracking-widest mt-2 block drop-shadow-sm">WINNER</span></div>
-            <div class="card p-4 h-24 flex-1 text-center border border-slate-200"><b>3rd</b><br><small class="font-bold text-sm">${amStatsGlobal[2]?.am || '—'}</small></div>
+            <div class="card p-4 h-32 flex-1 border border-slate-200"><b>2nd</b><br>${amStatsGlobal[1]?.am || '—'}</div>
+            <div class="card p-6 h-48 flex-1 winner-1st shadow-lg">👑 <b>1st Overall</b><br><b class="text-xl">${amStatsGlobal[0]?.am || '—'}</b></div>
+            <div class="card p-4 h-24 flex-1 border border-slate-200"><b>3rd</b><br>${amStatsGlobal[2]?.am || '—'}</div>
           </div>
         </div>
-        
-        <h3 class="font-black outfit text-slate-800 text-lg mb-4 ml-2 mt-8">KPI-SPECIFIC AREA CHAMPIONS</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           ${buildSubPodium('Sales Growth', 'sAvg', false, 1, 'percent')}
           ${buildSubPodium('Product Target', 'pAvg', false, 1, 'percent')}
-          ${buildSubPodium('Avg Transaction Value', 'atvAvg', false, 2, 'currency')}
           ${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}
           ${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}
-          ${buildSubPodium('Energy Efficiency', 'eAvg', true, 0, 'energy')}
+          ${buildSubPodium('Audit Standings', 'aAvg', false, 1, 'percent')}
         </div>
       </div>`;
   }
 
   if(currentView === 'leaderboard'){
     const sorted = curr.sort((a,b)=>(b.Sales*100)-(a.Sales*100)); 
-    const pMap = new Map(prev.sort((a,b)=>(b.Sales*100)-(a.Sales*100)).map((x,i)=>[x.Branch, i+1]));
     const rows = sorted.map((r, i) => {
-      const pR = pMap.get(r.Branch) || (i+1); const diff = pR - (i+1);
-      const t = diff > 0 ? `<span class="trend-up">▲${diff}</span>` : diff < 0 ? `<span class="trend-down">▼${Math.abs(diff)}</span>` : '<span class="trend-flat">—</span>';
-      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50 transition-colors"><td class="p-3 font-black">${i+1}</td><td class="p-3 text-center">${t}</td><td class="p-3 font-bold">${r.Branch}</td><td class="p-3 text-slate-500">${r.AM.split(' ')[0]}</td><td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td><td class="p-3 font-bold text-emerald-600">${(r.Product*100).toFixed(1)}%</td><td class="p-3">${(r.Waste*100).toFixed(1)}%</td><td class="p-3">£${r.ATV.toFixed(2)}</td><td class="p-3">${(r.Labour*100).toFixed(1)}%</td><td class="p-3">${r.Energy.toFixed(0)}</td><td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td></tr>`;
+      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50"><td class="p-3 font-black">${i+1}</td><td class="p-3 font-bold">${r.Branch}</td><td class="p-3 text-slate-500">${r.AM}</td><td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td><td class="p-3">${(r.Labour*100).toFixed(1)}%</td><td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td></tr>`;
     }).join('');
-    document.getElementById('mainView').innerHTML = `<div id="lb-card" class="card overflow-x-auto relative min-w-full">
-      <div onclick="exportCard('lb-card', 'Leaderboard')" class="export-btn absolute top-2 right-4 bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-bold flex items-center shadow-sm">📸 Export Dash</div>
-      <table class="w-full text-left mt-10"><thead class="table-head-soft border-b border-slate-200 text-[10px] font-bold muted">
-      <tr><th class="p-3">Rank</th><th class="p-3">Trend</th><th class="p-3">Store</th><th class="p-3">Area</th><th class="p-3">Sales</th><th class="p-3">Product</th><th class="p-3">Waste</th><th class="p-3">ATV</th><th class="p-3">Labour</th><th class="p-3">Energy</th><th class="p-3">Audit</th></tr>
-      </thead><tbody>${rows}</tbody></table></div>`;
+    document.getElementById('mainView').innerHTML = `<div class="card overflow-x-auto"><table class="w-full text-left"><thead><tr><th class="p-3">Rank</th><th class="p-3">Store</th><th class="p-3">Area</th><th class="p-3">Sales</th><th class="p-3">Labour</th><th class="p-3">Audit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 }
 
 function renderControlPanel() {
     let rows = '';
-    const sortedStores = Array.from(storeMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
-    
-    sortedStores.forEach(([branchId, currentAM]) => {
+    Array.from(storeMap.entries()).sort().forEach(([branchId, currentAM]) => {
         const origName = originalStoreNames.get(branchId) || branchId;
         let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
-        rows += `
-            <div class="flex justify-between items-center border-b border-slate-100 py-3 hover:bg-slate-50 transition-colors px-2 rounded">
-                <span class="font-bold text-slate-800 text-sm w-1/2">${origName}</span>
-                <select onchange="updateStoreAM('${branchId}', this.value)" class="p-1.5 border border-slate-200 rounded-lg text-sm bg-white shadow-sm w-1/2 focus:ring-2 focus:ring-birds-green outline-none">
-                    ${options}
-                </select>
-            </div>`;
+        rows += `<div class="flex justify-between items-center border-b border-slate-100 py-3"><span class="font-bold text-sm">${origName}</span><select onchange="updateStoreAM('${branchId}', this.value)" class="p-1 border rounded text-sm">${options}</select></div>`;
     });
-
-    document.getElementById('mainView').innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="col-span-1">
-                <div class="card p-6 mb-6">
-                    <h2 class="text-xl font-black birds-green mb-4">Add New Store</h2>
-                    <p class="text-xs text-slate-500 mb-4">Add an upcoming store to allocate it to an Area Manager immediately.</p>
-                    <div class="flex flex-col gap-3">
-                        <input type="text" id="newStoreName" placeholder="Enter Store Name..." class="border border-slate-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-birds-green outline-none w-full shadow-sm">
-                        <select id="newStoreAM" class="border border-slate-200 p-2.5 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-birds-green outline-none w-full">
-                            ${AM_LIST.map(a => `<option value="${a}">${a}</option>`).join('')}
-                        </select>
-                        <button onclick="addNewStore()" class="bg-birds hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-span-2">
-                <div class="card p-6 h-full">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-black birds-green">Store Allocation Matrix</h2>
-                        <span class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">${sortedStores.length} Stores</span>
-                    </div>
-                    <div class="max-h-[600px] overflow-y-auto pr-2">
-                        ${rows}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+    document.getElementById('mainView').innerHTML = `<div class="card p-6 max-w-2xl mx-auto"><h2 class="text-xl font-black birds-green mb-6">Allocation Matrix</h2>${rows}</div>`;
 }
 
 function setView(v) {
   currentView = v;
   document.querySelectorAll('nav button').forEach(b => {
-    b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap';
+    b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1' : 'seg-btn flex-1';
   });
   renderDashboard();
 }
