@@ -1199,9 +1199,24 @@ async function renderDashboard(){
         </div>`;
     };
 
+    const prevByStore = new Map(prev.map(p=>[p.Branch, p.Sales]));
+    const improvedStore = curr.map(c=>{
+      const p = prevByStore.get(c.Branch) || 0;
+      return {name: c.Branch, change: (c.Sales - p)};
+    }).sort((a,b)=>b.change-a.change)[0];
+
+    const improvedStoreHtml = `
+    <div class="card p-4 text-center mb-6">
+      <h4 class="text-xs font-black muted uppercase mb-1">🏬 Most Improved Store</h4>
+      <div class="text-base font-black birds-green">🥇 ${improvedStore?.name || '-'}</div>
+      <div class="text-xs text-emerald-600 font-bold">+${((improvedStore?.change||0)*100).toFixed(1)}%</div>
+      <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">Sales vs Prior Period</div>
+    </div>`;
+
     document.getElementById('mainView').innerHTML = `
       <div id="winners-card" class="pb-2">
         ${improvedAreaHtml}
+        ${improvedStoreHtml}
         <div class="card p-8 mb-6 text-center relative">
           <h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2>
           <div class="flex items-end gap-4 justify-center">
@@ -1231,18 +1246,54 @@ async function renderDashboard(){
 
 function renderControlPanel() {
     let rows = '';
-    Array.from(storeMap.entries()).sort().forEach(([branchId, currentAM]) => {
+    const sortedStores = Array.from(storeMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
+    
+    sortedStores.forEach(([branchId, currentAM]) => {
         const origName = originalStoreNames.get(branchId) || branchId;
         let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
-        rows += `<div class="flex justify-between items-center border-b border-slate-100 py-3"><span class="font-bold text-sm">${origName}</span><select onchange="updateStoreAM('${branchId}', this.value)" class="p-1 border rounded text-sm">${options}</select></div>`;
+        rows += `
+            <div class="flex justify-between items-center border-b border-slate-100 py-3 hover:bg-slate-50 transition-colors px-2 rounded">
+                <span class="font-bold text-slate-800 text-sm w-1/2">${origName}</span>
+                <select onchange="updateStoreAM('${branchId}', this.value)" class="p-1.5 border border-slate-200 rounded-lg text-sm bg-white shadow-sm w-1/2 focus:ring-2 focus:ring-birds-green outline-none">
+                    ${options}
+                </select>
+            </div>`;
     });
-    document.getElementById('mainView').innerHTML = `<div class="card p-6 max-w-2xl mx-auto"><h2 class="text-xl font-black birds-green mb-6">Allocation Matrix</h2>${rows}</div>`;
+
+    document.getElementById('mainView').innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="col-span-1">
+                <div class="card p-6 mb-6">
+                    <h2 class="text-xl font-black birds-green mb-4">Add New Store</h2>
+                    <p class="text-xs text-slate-500 mb-4">Add an upcoming store to allocate it to an Area Manager immediately.</p>
+                    <div class="flex flex-col gap-3">
+                        <input type="text" id="newStoreName" placeholder="Enter Store Name..." class="border border-slate-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-birds-green outline-none w-full shadow-sm">
+                        <select id="newStoreAM" class="border border-slate-200 p-2.5 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-birds-green outline-none w-full">
+                            ${AM_LIST.map(a => `<option value="${a}">${a}</option>`).join('')}
+                        </select>
+                        <button onclick="addNewStore()" class="bg-birds hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-span-2">
+                <div class="card p-6 h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black birds-green">Store Allocation Matrix</h2>
+                        <span class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">${sortedStores.length} Stores</span>
+                    </div>
+                    <div class="max-h-[600px] overflow-y-auto pr-2">
+                        ${rows}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function setView(v) {
   currentView = v;
   document.querySelectorAll('nav button').forEach(b => {
-    b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1' : 'seg-btn flex-1';
+    b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap';
   });
   renderDashboard();
 }
