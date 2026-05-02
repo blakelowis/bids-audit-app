@@ -5,14 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Birds Executive Hub</title>
   
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="" id="manifestLink">
   <meta name="theme-color" content="#00A88E">
+ <script>
+ (function(){
+  try{
+    var link = document.getElementById('manifestLink');
+    if(!link) return;
+    if(location.protocol === 'file:'){
+      // avoid CORS noise when opened via file:// (PWA requires localhost/https)
+      link.parentNode && link.parentNode.removeChild(link);
+    } else {
+      link.setAttribute('href','manifest.json');
+    }
+  }catch(e){}
+ })();
+ </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   
   <script>
     async function exportVisibleViewAsZip(){
-      const cards = document.querySelectorAll('#mainView .card, .area-card-export');
+      let cards = document.querySelectorAll('#mainView .card, .area-card-export');
+ if(currentView === 'halloffame') {
+  const y = document.getElementById('ytd-card');
+  if(y) cards = [y];
+ }
       if(!cards.length){ alert('Nothing to export on this view'); return; }
 
       const zip = new JSZip();
@@ -162,6 +180,7 @@
       <button onclick="setView('areas')" id="btn-areas" class="seg-btn flex-1 whitespace-nowrap">Area Weekly Report</button>
       <button onclick="setView('winners')" id="btn-winners" class="seg-btn flex-1 whitespace-nowrap">Winners Podium</button>
       <button onclick="setView('leaderboard')" id="btn-leaderboard" class="seg-btn flex-1 whitespace-nowrap">Network Leaderboard</button>
+ <button onclick="setView('halloffame')" id="btn-halloffame" class="seg-btn flex-1 whitespace-nowrap">🏆 YTD Awards</button>
       <button onclick="setView('control')" id="btn-control" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
     </nav>
 
@@ -171,15 +190,19 @@
 
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      console.log('ServiceWorker registration successful');
-    }).catch(err => {
-      console.log('ServiceWorker registration failed: ', err);
-    });
+ window.addEventListener('load', () => {
+  const isSecure = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  if(!isSecure){
+    console.log('ServiceWorker skipped (requires https or localhost).');
+    return;
+  }
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    console.log('ServiceWorker registration successful');
+  }).catch(err => {
+    console.log('ServiceWorker registration failed: ', err);
   });
+ });
 }
-
 const DEFAULT_AREA_MAPPING = {
   'Katie Cartwright': ['Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark','Radcliffe','Ruddington','Southwell','Sherwood','Sutton','Sutton Lakeside','Victoria Centre'],
   'Craig White': ['Alfreton','Arnold','Beeston','Ilkeston','Lister Gate','Listergate','Long Eaton','Mansfield','Mapperley','Teal Park','West Bridgford','Wollaton'],
@@ -195,8 +218,16 @@ let storeMap = new Map();
 let originalStoreNames = new Map();
 let currentTimeFilter = 'latest';
 let trendChartInstance = null;
+let archiveWeekOverride = null; // enables historical 'time travel' (week inspector)
+function setArchiveWeekOverride(w){
+  const n = parseInt(w,10);
+  archiveWeekOverride = (Number.isFinite(n) && n>0) ? n : null;
+  renderDashboard();
+}
+function clearArchiveWeekOverride(){ archiveWeekOverride = null; renderDashboard(); }
 
-const req = indexedDB.open('BirdsExecutiveHub_v14', 1);
+
+const req = indexedDB.open('BirdsExecutiveHub_v14', 3);
 req.onupgradeneeded = e => {
   const d = e.target.result;
   if(!d.objectStoreNames.contains('kpi')) d.createObjectStore('kpi', { keyPath: ['Branch','Week'] });
@@ -204,12 +235,25 @@ req.onupgradeneeded = e => {
   if(!d.objectStoreNames.contains('stores')) d.createObjectStore('stores', { keyPath: 'BranchId' });
   if(!d.objectStoreNames.contains('actions')) d.createObjectStore('actions', { keyPath: 'ActionID', autoIncrement: true });
   if(!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'id' });
+ if(!d.objectStoreNames.contains('area_winners_log')) d.createObjectStore('area_winners_log', { keyPath: ['Year','Week'] });
+  if(!d.objectStoreNames.contains('area_metric_winners_log')) d.createObjectStore('area_metric_winners_log', { keyPath: ['Year','Week','Metric'] });
+ if(!d.objectStoreNames.contains('store_winners_log')) d.createObjectStore('store_winners_log', { keyPath: ['Year','Week','Metric'] });
+ if(!d.objectStoreNames.contains('closure_flags')) d.createObjectStore('closure_flags', { keyPath: ['Year','Week','Branch'] });
 };
 req.onsuccess = async e => { 
     db = e.target.result; 
     await loadStoreMap();
     await loadDirectoryHandle();
-    renderDashboard(); 
+    renderDashboard();
+ // If opened via file://, explain why manifest/SW won't work
+ try{
+  if(location.protocol==='file:'){
+    const fs = document.getElementById('folderStatus');
+    const is = document.getElementById('ingestStatus');
+    if(fs) fs.innerText = 'Status: Opened from file:// (use localhost for full PWA mode)';
+    if(is) is.innerText = 'Tip: run a local server (localhost) to enable manifest + offline caching';
+  }
+ }catch(e){} 
 };
 
 // Safe DB Wrappers to prevent hangs
@@ -349,6 +393,391 @@ async function validateAndCorrectData(weeksTouched){
   }
 }
 
+
+
+// --- Persistent Awards (YTD / Quarterly) + Closure/Outlier Filtering ---
+const DEFAULT_CLOSURE_THRESHOLD = 0.30; // 30% variance filter for operational closures/outliers
+let currentAwardsYear = new Date().getFullYear();
+let currentAwardsPeriod = 'ytd';
+
+async function getSetting(id, fallback){
+  const settings = await idbGetAll('settings');
+  const s = settings.find(x => x.id === id);
+  return (s && s.value !== undefined) ? s.value : fallback;
+}
+
+async function setSetting(id, value){
+  await idbPut('settings', { id, value });
+}
+
+function _relDiff(a, b){
+  a = _finiteOr0(a); b = _finiteOr0(b);
+  const denom = Math.abs(b) > 1e-9 ? Math.abs(b) : 0;
+  if(denom === 0) return Infinity;
+  return Math.abs(a-b) / denom;
+}
+
+function _flagClosedOrOutlier(currRec, prevRec, netAvgSales, thr){
+  // Heuristic: if Sales drops heavily vs previous week OR vs network avg, treat as operational closure/outlier.
+  // Used to EXCLUDE stores from reduction medals (Waste/Labour/Energy) to avoid false wins when closed.
+  const cS = _finiteOr0(currRec?.Sales);
+  const pS = _finiteOr0(prevRec?.Sales);
+  const nS = _finiteOr0(netAvgSales);
+  // immediate closure signal: near-zero sales compared to a normal baseline
+  if(cS <= 0.0005 && (pS > 0.02 || nS > 0.02)) return true;
+  if(pS > 0.02 && (pS - cS) / pS > thr) return true;
+  if(nS > 0.02 && (nS - cS) / nS > thr) return true;
+  return false;
+}
+
+function _metricOutlier(currVal, prevVal, netAvg, thr){
+  // Generic outlier check vs previous week OR network avg
+  const c = _finiteOr0(currVal);
+  const p = _finiteOr0(prevVal);
+  const n = _finiteOr0(netAvg);
+  if(p > 1e-9 && _relDiff(c, p) > thr) return true;
+  if(n > 1e-9 && _relDiff(c, n) > thr) return true;
+  return false;
+}
+
+async function recordPersistentWinnersForWeeks(year, weeks){
+  const thr = await getSetting('closureThreshold', DEFAULT_CLOSURE_THRESHOLD);
+  const kpis = await idbGetAll('kpi');
+  const audits = await idbGetAll('audits');
+
+  for(const week of weeks){
+    const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week && k.AM !== 'Unassigned');
+    if(!wkKpis.length) continue;
+
+    // Build maps for quick prev lookup
+    const prevMap = new Map(kpis
+      .filter(k => (k.Year ?? year) === year && k.Week === (week-1) && k.AM !== 'Unassigned')
+      .map(k => [String(k.Branch).trim().toLowerCase(), k]));
+
+    const netAvgSales = wkKpis.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/(wkKpis.length||1);
+    const netAvg = (field) => wkKpis.reduce((a,b)=>a+(_finiteOr0(b[field])),0)/(wkKpis.length||1);
+
+    // Persist closure flags
+    for(const r of wkKpis){
+      const key = String(r.Branch).trim().toLowerCase();
+      const prev = prevMap.get(key);
+      const closed = _flagClosedOrOutlier(r, prev, netAvgSales, thr);
+      await idbPut('closure_flags', { Year: year, Week: week, Branch: r.Branch, ClosedFlag: closed, Threshold: thr });
+    }
+
+    // Area composite winner (commercial score) - Sales - Labour
+    const areaEff = AM_LIST.filter(a=>a!=='Unassigned').map(am => {
+      const stores = wkKpis.filter(k=>k.AM===am);
+      if(!stores.length) return null;
+      const avgS = stores.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/stores.length;
+      const avgL = stores.reduce((a,b)=>a+(_finiteOr0(b.Labour)),0)/stores.length;
+      return { am, score: (avgS*100) - (avgL*100) };
+    }).filter(Boolean).sort((a,b)=>b.score-a.score);
+
+    if(areaEff[0]){
+      await idbPut('area_winners_log', { Year: year, Week: week, Winner: areaEff[0].am, Score: areaEff[0].score });
+    }
+
+
+  // Area of the Week: ATV (highest average ATV across stores in area)
+  const areaATV = AM_LIST.filter(a=>a!=='Unassigned').map(am => {
+    const stores = wkKpis.filter(k=>k.AM===am);
+    if(!stores.length) return null;
+    const avgATV = stores.reduce((a,b)=>a+(_finiteOr0(b.ATV)),0)/stores.length;
+    return { am, score: avgATV };
+  }).filter(Boolean).sort((a,b)=>b.score-a.score);
+  if(areaATV[0]){
+    await idbPut('area_metric_winners_log', { Year: year, Week: week, Metric: 'ATV', Winner: areaATV[0].am, Score: areaATV[0].score });
+  }
+    // Medal awarding per KPI category
+    const metrics = [
+      { id: 'Sales', order: 'desc', inverse:false },
+      { id: 'Waste', order: 'asc', inverse:true },
+      { id: 'Labour', order: 'asc', inverse:true },
+      { id: 'Product', order: 'desc', inverse:false },
+      { id: 'ATV', order: 'desc', inverse:false },
+      { id: 'Energy', order: 'asc', inverse:true }
+    ];
+
+    const flags = await idbGetAll('closure_flags');
+    const flagMap = new Map(flags.filter(f=>f.Year===year && f.Week===week).map(f=>[String(f.Branch).trim().toLowerCase(), !!f.ClosedFlag]));
+
+    for(const m of metrics){
+      const netA = netAvg(m.id);
+      const candidates = wkKpis.filter(rec => {
+        const key = String(rec.Branch).trim().toLowerCase();
+        const prev = prevMap.get(key);
+        // Exclude closure/outlier from reduction medals
+        if(m.inverse && flagMap.get(key)===true) return false;
+        // Also exclude extreme metric swings (likely closure/maintenance distortion)
+        if(m.inverse && _metricOutlier(rec[m.id], prev?.[m.id], netA, thr)) return false;
+        return true;
+      });
+      if(!candidates.length) continue;
+      const sorted = [...candidates].sort((a,b)=> m.order==='desc' ? (_finiteOr0(b[m.id])-_finiteOr0(a[m.id])) : (_finiteOr0(a[m.id])-_finiteOr0(b[m.id])) );
+      if(sorted[0]) await idbPut('store_winners_log', { Year: year, Week: week, Metric: m.id, Branch: sorted[0].Branch });
+    }
+
+    // Audit medal (best score)
+    const wkAudits = audits.filter(a => (a.Year ?? year) === year && a.Week === week);
+    if(wkAudits.length){
+      const bestAudit = wkAudits.sort((a,b)=>_finiteOr0(b.Score)-_finiteOr0(a.Score))[0];
+      await idbPut('store_winners_log', { Year: year, Week: week, Metric: 'Audit', Branch: bestAudit.Store });
+    }
+  }
+}
+
+function _periodWeeks(period, latestWeek){
+  // Quarter mapping by week number: Q1 1-13, Q2 14-26, Q3 27-39, Q4 40-53
+  const maxW = Math.max(1, latestWeek||1);
+  if(period==='q1') return {from:1, to:Math.min(13,maxW)};
+  if(period==='q2') return {from:14, to:Math.min(26,maxW)};
+  if(period==='q3') return {from:27, to:Math.min(39,maxW)};
+  if(period==='q4') return {from:40, to:Math.min(53,maxW)};
+  return {from:1, to:maxW}; // ytd
+}
+
+async function rebuildAwardsFromData(){
+  const year = currentAwardsYear;
+  const allKpis = await idbGetAll('kpi');
+  const yearWeeks = [...new Set(allKpis.filter(k => (k.Year ?? year) === year).map(k=>k.Week))].sort((a,b)=>a-b);
+  await _hardDeleteYearFromLogs(year);
+  await recordPersistentWinnersForWeeks(year, yearWeeks);
+  renderDashboard();
+}
+
+async function _hardDeleteYearFromLogs(year){
+  // Replace stores with only non-year records (workaround without a delete wrapper)
+  const tx = db.transaction(['area_winners_log','area_metric_winners_log','store_winners_log','closure_flags'], 'readwrite');
+  const aStore = tx.objectStore('area_winners_log');
+  const amStore = tx.objectStore('area_metric_winners_log');
+  const sStore = tx.objectStore('store_winners_log');
+  const cStore = tx.objectStore('closure_flags');
+
+  const [aAll, amAll, sAll, cAll] = await Promise.all([
+    new Promise(res=>{ const r=aStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }),
+    new Promise(res=>{ const r=amStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }),
+    new Promise(res=>{ const r=sStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }),
+    new Promise(res=>{ const r=cStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); })
+  ]);
+
+  await Promise.all([
+    new Promise(res=>{ const r=aStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); }),
+    new Promise(res=>{ const r=amStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); }),
+    new Promise(res=>{ const r=sStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); }),
+    new Promise(res=>{ const r=cStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); })
+  ]);
+
+  aAll.filter(x=>x.Year!==year).forEach(x=>aStore.put(x));
+  amAll.filter(x=>x.Year!==year).forEach(x=>amStore.put(x));
+  sAll.filter(x=>x.Year!==year).forEach(x=>sStore.put(x));
+  cAll.filter(x=>x.Year!==year).forEach(x=>cStore.put(x));
+
+  await new Promise(res=>{ tx.oncomplete=()=>res(true); tx.onerror=()=>res(true); });
+}
+
+async function renderHallOfFame(){
+  const kpis = await idbGetAll('kpi');
+  if(!kpis.length){
+    document.getElementById('mainView').innerHTML = `<div class="p-20 text-center text-slate-400 font-bold uppercase">No Data Loaded.</div>`;
+    return;
+  }
+
+  const years = [...new Set(kpis.map(k => k.Year || currentAwardsYear))].sort((a,b)=>b-a);
+  if(!years.length) years.push(new Date().getFullYear());
+  if(!years.includes(currentAwardsYear)) currentAwardsYear = years[0];
+
+  const yearKpis = kpis.filter(k => (k.Year || currentAwardsYear) === currentAwardsYear);
+  const latestWeek = Math.max(...yearKpis.map(k=>k.Week));
+  const {from, to} = _periodWeeks(currentAwardsPeriod, latestWeek);
+
+  const storeLog = await idbGetAll('store_winners_log');
+  const areaLog = await idbGetAll('area_winners_log');
+  const areaMetricLog = await idbGetAll('area_metric_winners_log');
+
+  let periodStores = storeLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
+  let periodAreas = areaLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
+  const periodAreaMetrics = areaMetricLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
+
+// FALLBACK_COMPUTE_FROM_KPI: If logs are empty (e.g. first run), compute winners on-the-fly from KPI/Audit data
+if(periodStores.length === 0){
+  const thr = await getSetting('closureThreshold', DEFAULT_CLOSURE_THRESHOLD);
+  const auditsAll = await idbGetAll('audits');
+  const kpisAll = await idbGetAll('kpi');
+  const weeksInRange = [...new Set(kpisAll
+    .filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week >= from && k.Week <= to && k.AM !== 'Unassigned')
+    .map(k=>k.Week))].sort((a,b)=>a-b);
+
+  const tmpStoreWins = [];
+  const tmpAreaWins = [];
+
+  for(const week of weeksInRange){
+    const wkKpis = kpisAll.filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week === week && k.AM !== 'Unassigned');
+    if(!wkKpis.length) continue;
+
+    const prevMap = new Map(kpisAll
+      .filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week === (week-1) && k.AM !== 'Unassigned')
+      .map(k => [String(k.Branch).trim().toLowerCase(), k]));
+
+    const netAvgSales = wkKpis.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/(wkKpis.length||1);
+    const netAvg = (field)=> wkKpis.reduce((a,b)=>a+(_finiteOr0(b[field])),0)/(wkKpis.length||1);
+
+    const flags = new Map();
+    for(const r of wkKpis){
+      const key = String(r.Branch).trim().toLowerCase();
+      const prev = prevMap.get(key);
+      flags.set(key, _flagClosedOrOutlier(r, prev, netAvgSales, thr));
+    }
+
+    // Area win (weekly)
+    const areaEff = AM_LIST.filter(a=>a!=='Unassigned').map(am=>{
+      const stores = wkKpis.filter(k=>k.AM===am);
+      if(!stores.length) return null;
+      const avgS = stores.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/stores.length;
+      const avgL = stores.reduce((a,b)=>a+(_finiteOr0(b.Labour)),0)/stores.length;
+      return { am, score:(avgS*100)-(avgL*100) };
+    }).filter(Boolean).sort((a,b)=>b.score-a.score);
+    if(areaEff[0]) tmpAreaWins.push({ Year: currentAwardsYear, Week: week, Winner: areaEff[0].am });
+
+    const metrics = [
+      { id: 'Sales', order: 'desc', inverse:false },
+      { id: 'Waste', order: 'asc', inverse:true },
+      { id: 'Labour', order: 'asc', inverse:true },
+      { id: 'Product', order: 'desc', inverse:false },
+      { id: 'ATV', order: 'desc', inverse:false },
+      { id: 'Energy', order: 'asc', inverse:true }
+    ];
+
+    for(const m of metrics){
+      const netA = netAvg(m.id);
+      const candidates = wkKpis.filter(rec=>{
+        const key = String(rec.Branch).trim().toLowerCase();
+        const prev = prevMap.get(key);
+        if(m.inverse && flags.get(key)===true) return false;
+        if(m.inverse && _metricOutlier(rec[m.id], prev?.[m.id], netA, thr)) return false;
+        return true;
+      });
+      if(!candidates.length) continue;
+      const sorted = [...candidates].sort((a,b)=> m.order==='desc' ? (_finiteOr0(b[m.id])-_finiteOr0(a[m.id])) : (_finiteOr0(a[m.id])-_finiteOr0(b[m.id])) );
+      if(sorted[0]) tmpStoreWins.push({ Year: currentAwardsYear, Week: week, Metric: m.id, Branch: sorted[0].Branch });
+    }
+
+    // Audit medal
+    const wkAudits = auditsAll.filter(a => (a.Year || currentAwardsYear) === currentAwardsYear && a.Week === week);
+    if(wkAudits.length){
+      const bestAudit = wkAudits.sort((a,b)=>_finiteOr0(b.Score)-_finiteOr0(a.Score))[0];
+      tmpStoreWins.push({ Year: currentAwardsYear, Week: week, Metric: 'Audit', Branch: bestAudit.Store });
+    }
+  }
+
+  periodStores = tmpStoreWins;
+  periodAreas = tmpAreaWins;
+}
+
+
+  const storeMedals = {};
+  const storeBreakdown = {};
+  periodStores.forEach(l => {
+    storeMedals[l.Branch] = (storeMedals[l.Branch] || 0) + 1;
+    if(!storeBreakdown[l.Branch]) storeBreakdown[l.Branch] = {};
+    storeBreakdown[l.Branch][l.Metric] = (storeBreakdown[l.Branch][l.Metric] || 0) + 1;
+  });
+  const sortedStores = Object.entries(storeMedals).sort((a,b)=>b[1]-a[1]);
+
+  const areaWins = periodAreas.reduce((acc, l)=>{ acc[l.Winner] = (acc[l.Winner]||0)+1; return acc; }, {});
+  // Add ATV Area-of-the-Week wins into the same medal count
+  periodAreaMetrics.filter(l=>l.Metric==='ATV').forEach(l=>{ areaWins[l.Winner] = (areaWins[l.Winner]||0) + 1; });
+  const sortedAreas = Object.entries(areaWins).sort((a,b)=>b[1]-a[1]);
+
+  const thr = await getSetting('closureThreshold', DEFAULT_CLOSURE_THRESHOLD);
+  const periodLabel = currentAwardsPeriod==='ytd' ? `Year to Date (Wk 1–${latestWeek})` : currentAwardsPeriod.toUpperCase() + ` (Wk ${from}–${to})`;
+ const weeksCount = [...new Set(periodStores.map(x=>x.Week))].length;
+ const topStore = sortedStores[0];
+ const topArea = sortedAreas[0];
+
+  document.getElementById('mainView').innerHTML = `
+<div id="ytd-card" class="bg-transparent p-1">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-black outfit birds-green uppercase tracking-tight">YTD AWARDS DASHBOARD</h2>
+    <div onclick="exportCard('ytd-card','YTD_Awards')" class="export-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
+  </div>
+  <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
+      <div>
+        <h2 class="text-3xl font-black outfit birds-green uppercase tracking-tighter">🏆 Awards & Leaderboards</h2>
+        <p class="text-slate-500 text-sm font-bold">${currentAwardsYear} • ${periodLabel} • Closure/Outlier filter: ${(thr*100).toFixed(0)}%</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <select onchange="currentAwardsYear=parseInt(this.value); renderHallOfFame();" class="input-chip text-sm">
+          ${years.map(y=>`<option value="${y}" ${y===currentAwardsYear?'selected':''}>Season ${y}</option>`).join('')}
+        </select>
+        <select onchange="currentAwardsPeriod=this.value; renderHallOfFame();" class="input-chip text-sm">
+          <option value="ytd" ${currentAwardsPeriod==='ytd'?'selected':''}>📈 YTD</option>
+          <option value="q1" ${currentAwardsPeriod==='q1'?'selected':''}>Q1 (Wk 1–13)</option>
+          <option value="q2" ${currentAwardsPeriod==='q2'?'selected':''}>Q2 (Wk 14–26)</option>
+          <option value="q3" ${currentAwardsPeriod==='q3'?'selected':''}>Q3 (Wk 27–39)</option>
+          <option value="q4" ${currentAwardsPeriod==='q4'?'selected':''}>Q4 (Wk 40–53)</option>
+        </select>
+        <button onclick="(async()=>{const v=parseFloat(prompt('Closure/outlier threshold (e.g. 0.30 for 30%)', (await getSetting(\'closureThreshold\', DEFAULT_CLOSURE_THRESHOLD)).toString())); if(!isNaN(v) && v>0 && v<1){ await setSetting(\'closureThreshold\', v); } renderHallOfFame();})()" class="btn-secondary">⚖️ Threshold</button>
+        <button onclick="rebuildAwardsFromData()" class="btn-primary">🔁 Rebuild Awards</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="card p-4 border-t-4 border-t-amber-400">
+        <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Store</div>
+        <div class="text-lg font-black text-amber-600">${topStore ? topStore[0] : '—'}</div>
+        <div class="text-xs font-bold text-slate-600">${topStore ? topStore[1] : 0} medals</div>
+      </div>
+      <div class="card p-4 border-t-4 border-t-birds-green">
+        <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Area</div>
+        <div class="text-lg font-black birds-green">${topArea ? topArea[0] : '—'}</div>
+        <div class="text-xs font-bold text-slate-600">${topArea ? topArea[1] : 0} wins</div>
+      </div>
+      <div class="card p-4 border-t-4 border-t-slate-300">
+        <div class="text-[10px] font-black text-slate-400 uppercase">Weeks Counted</div>
+        <div class="text-lg font-black text-slate-700">${weeksCount}</div>
+        <div class="text-xs font-bold text-slate-600">weekly logs included</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="card p-6 border-t-4 border-t-birds-green">
+        <h3 class="font-black outfit text-sm mb-4 uppercase tracking-widest text-slate-400">Area with Most Weekly Wins</h3>
+        ${sortedAreas.length ? sortedAreas.map(([am,wins],i)=>`
+          <div class="flex justify-between items-center border-b border-slate-100 py-3 last:border-0">
+            <span class="font-bold text-slate-700">${i+1}. ${am}</span>
+            <span class="text-birds-green font-black">${wins} Wins</span>
+          </div>`).join('') : `<p class="text-slate-400 italic">No area wins logged yet. Hit ‘Rebuild Awards’ after syncing data.</p>`}
+      </div>
+
+      <div class="card p-6 lg:col-span-2 border-t-4 border-t-amber-400">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h3 class="font-black outfit text-amber-600 text-xl uppercase tracking-tighter">⭐ Store Medal Table</h3>
+            <p class="text-xs text-slate-400 font-bold uppercase mt-1">Total medals across weeks (excludes closed/outlier stores from reduction medals)</p>
+          </div>
+          <div class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-black text-xs uppercase">Awards Engine</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-3">
+          ${sortedStores.length ? sortedStores.map(([branch,wins],i)=>{
+            const b = storeBreakdown[branch] || {};
+            const summary = Object.entries(b).map(([m,c])=>`<span class="bg-slate-100 text-[9px] px-1.5 py-0.5 rounded font-bold">${m}:${c}</span>`).join(' ');
+            return `
+              <div class="border-b border-slate-100 pb-3 flex flex-col">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-bold text-sm ${i<3?'text-amber-600':'text-slate-700'}">${i+1}. ${branch}</span>
+                  <span class="font-black text-amber-600 text-lg">${wins} 🏅</span>
+                </div>
+                <div class="flex flex-wrap gap-1 opacity-80">${summary}</div>
+              </div>`;
+          }).join('') : `<p class="text-slate-400 italic">No medals awarded yet. Hit ‘Rebuild Awards’ after syncing data.</p>`}
+        </div>
+      </div>
+    </div>
+</div>
+`;
+}
 function findCols(rows){
   for(let r=0; r<Math.min(rows.length, 30); r++){
     if(!rows[r]) continue;
@@ -473,6 +902,7 @@ async function syncData() {
   }
 
   const weeksTouched = new Set();
+ const yearsTouched = new Set();
   await idbClear('actions'); 
 
   // Robust Processing Loop with UI yield
@@ -493,7 +923,11 @@ async function syncData() {
       const wb = XLSX.read(buffer, { type: 'array' });
       
       const wkMatch = file.name.match(/Wk(\d+)/i);
-      const fileWk = wkMatch ? parseInt(wkMatch[1]) : 0;
+ const fileWk = wkMatch ? parseInt(wkMatch[1]) : 0;
+ const yrMatch = file.name.match(/(20\d{2})/);
+ const fileYr = yrMatch ? parseInt(yrMatch[1], 10) : (new Date().getFullYear());
+ yearsTouched.add(fileYr);
+ currentAwardsYear = Math.max(currentAwardsYear || fileYr, fileYr);
       if(fileWk) weeksTouched.add(fileWk);
       if(fileWk > latestWkGlobal) latestWkGlobal = fileWk;
 
@@ -508,7 +942,7 @@ async function syncData() {
             
             let branchId = String(r[cols.idxB]).trim().toLowerCase();
             await idbPut('kpi', {
-              Branch: String(r[cols.idxB]).trim(), Week: fileWk, AM: storeMap.get(branchId) || 'Unassigned',
+              Branch: String(r[cols.idxB]).trim(), Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
               Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, 
               Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, 
@@ -528,8 +962,8 @@ async function syncData() {
             for(const r of json) {
               if(r.Store) {
                 await idbPut('audits', {
-                  Store: String(r.Store).trim(), Week: sWk,
-                  Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1),
+                  Store: String(r.Store).trim(), Week: sWk, Year: fileYr,
+ Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1),
                   Food: parseVal(r['Food safety']), Fire: parseVal(r['Fire safety']), HandS: parseVal(r['HandS ']), 
                   Journey: parseVal(r['Customer journey']), Coffee: parseVal(r['Coffee']), Focus: parseVal(r['Birds focus'])
                 });
@@ -566,7 +1000,9 @@ async function syncData() {
 
   document.getElementById('ingestStatus').innerText = "Last Updated: " + new Date().toLocaleTimeString();
   await validateAndCorrectData(Array.from(weeksTouched));
-  renderDashboard();
+ // Persist weekly winners for YTD/Quarterly awards
+ for(const yr of Array.from(yearsTouched)) { await recordPersistentWinnersForWeeks(yr, Array.from(weeksTouched)); }
+ renderDashboard();
 }
 
 function getTrendStr(currVal, prevVal, isInverse=false, format='percent') {
@@ -689,6 +1125,9 @@ function aggregateData(dataArray) {
 
 async function renderTrendsPanel() {
     const validAMs = Array.from(new Set(Array.from(storeMap.values()))).filter(am => am !== 'Unassigned');
+    const rawKpisAll = await idbGetAll('kpi');
+    const weeksAll = [...new Set(rawKpisAll.map(k=>k.Week))].sort((a,b)=>a-b);
+    const weeksOptions = weeksAll.map(w => `<option value="${w}" ${archiveWeekOverride===w?'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
 
     document.getElementById('mainView').innerHTML = `
@@ -697,7 +1136,7 @@ async function renderTrendsPanel() {
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 pr-24">
                 <div>
                     <h2 class="text-2xl font-black outfit birds-green">Historical Trend Analysis</h2>
-                    <p class="text-sm text-slate-500">Track key performance indicators over time across the entire network or specific areas.</p>
+                    <p class="text-sm text-slate-500">Track key performance indicators over time across the entire network or specific areas. Click a point to open that week or pick an Archive Week.</p>
                 </div>
                 <div class="flex gap-2 w-full md:w-auto">
                     <select id="trendMetric" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
@@ -711,6 +1150,10 @@ async function renderTrendsPanel() {
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="Network">Network Average</option>
                         ${amOptions}
+                    </select>
+                    <select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
+                        <option value="" ${!archiveWeekOverride?'selected':''}>🕰️ Follow Latest</option>
+                        ${weeksOptions}
                     </select>
                 </div>
             </div>
@@ -776,6 +1219,15 @@ async function drawTrendChart() {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
+            onClick: function(evt, elements){
+                try{
+                    if(elements && elements.length){
+                        const idx = elements[0].index;
+                        const wk = weeks[idx];
+                        if(wk){ setArchiveWeekOverride(wk); setView('overview'); }
+                    }
+                }catch(e){}
+            },
             scales: {
                 y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } },
                 x: { grid: { display: false }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }
@@ -802,8 +1254,9 @@ async function drawTrendChart() {
 }
 
 async function renderDashboard(){
-  if(currentView === 'control') return renderControlPanel();
-  if(currentView === 'trends') return renderTrendsPanel();
+ if(currentView === 'control') return renderControlPanel();
+ if(currentView === 'trends') return renderTrendsPanel();
+ if(currentView === 'halloffame') return renderHallOfFame();
 
   const rawKpis = await idbGetAll('kpi'); 
   const allAudits = await idbGetAll('audits'); 
@@ -812,25 +1265,26 @@ async function renderDashboard(){
   if(!rawKpis.length && currentView !== 'control') return;
   
   latestWkGlobal = Math.max(...rawKpis.map(k => k.Week));
+ let effectiveWeek = (archiveWeekOverride && Number.isFinite(archiveWeekOverride)) ? archiveWeekOverride : latestWkGlobal;
   
   let curr = [], prev = [];
   let currAudits = [], prevAudits = [];
   let currActions = [], prevActions = [];
   
   if (currentTimeFilter === 'latest') {
-      curr = aggregateData(rawKpis.filter(k => k.Week === latestWkGlobal));
-      prev = aggregateData(rawKpis.filter(k => k.Week === latestWkGlobal - 1));
-      currAudits = allAudits.filter(a => a.Week === latestWkGlobal);
-      prevAudits = allAudits.filter(a => a.Week === latestWkGlobal - 1);
-      currActions = allActions.filter(a => a.Week === latestWkGlobal);
-      prevActions = allActions.filter(a => a.Week === latestWkGlobal - 1);
+      curr = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek));
+      prev = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek - 1));
+      currAudits = allAudits.filter(a => a.Week === effectiveWeek);
+      prevAudits = allAudits.filter(a => a.Week === effectiveWeek - 1);
+      currActions = allActions.filter(a => a.Week === effectiveWeek);
+      prevActions = allActions.filter(a => a.Week === effectiveWeek - 1);
   } else if (currentTimeFilter === 'last4') {
-      curr = aggregateData(rawKpis.filter(k => k.Week <= latestWkGlobal && k.Week > latestWkGlobal - 4));
-      prev = aggregateData(rawKpis.filter(k => k.Week <= latestWkGlobal - 4 && k.Week > latestWkGlobal - 8));
-      currAudits = allAudits.filter(a => a.Week <= latestWkGlobal && a.Week > latestWkGlobal - 4);
-      prevAudits = allAudits.filter(a => a.Week <= latestWkGlobal - 4 && a.Week > latestWkGlobal - 8);
-      currActions = allActions.filter(a => a.Week <= latestWkGlobal && a.Week > latestWkGlobal - 4);
-      prevActions = allActions.filter(a => a.Week <= latestWkGlobal - 4 && a.Week > latestWkGlobal - 8);
+      curr = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek && k.Week > effectiveWeek - 4));
+      prev = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek - 4 && k.Week > effectiveWeek - 8));
+      currAudits = allAudits.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4);
+      prevAudits = allAudits.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
+      currActions = allActions.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4);
+      prevActions = allActions.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
   } else if (currentTimeFilter === 'ytd') {
       curr = aggregateData(rawKpis); 
       prev = []; 
@@ -927,9 +1381,10 @@ async function renderDashboard(){
   const bestLabourAM = [...amStatsGlobal].sort((a,b)=>a.lAvg-b.lAvg)[0]?.am;
   const bestEnergyAM = [...amStatsGlobal].sort((a,b)=>a.eAvg-b.eAvg)[0]?.am;
   const bestAuditAM = [...amStatsGlobal].sort((a,b)=>b.aAvg-a.aAvg)[0]?.am;
+ const bestATVAM = [...amStatsGlobal].sort((a,b)=>b.atvAvg-a.atvAvg)[0]?.am;
 
   if(currentView === 'overview'){
-    const filterLabel = currentTimeFilter === 'latest' ? `Wk ${latestWkGlobal}` : currentTimeFilter === 'last4' ? 'Rolling 4 Weeks' : 'Year to Date';
+    const filterLabel = currentTimeFilter === 'latest' ? `Wk ${effectiveWeek}${archiveWeekOverride? ' (Archive)' : ''}` : currentTimeFilter === 'last4' ? 'Rolling 4 Weeks' : 'Year to Date';
     const areaRows = amStatsGlobal.map((am, i) => `
       <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
         <div class="flex items-center gap-3">
@@ -1092,6 +1547,7 @@ async function renderDashboard(){
       if (am === bestWasteAM) badges += `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Waste</span>`;
       if (am === bestLabourAM) badges += `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Labour</span>`;
       if (am === bestAuditAM) badges += `<span class="bg-teal-50 text-teal-700 border border-teal-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Audit</span>`;
+ if (am === bestATVAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
 
       const cardId = `area-card-${am.replace(/\s+/g, '-')}`;
 
@@ -1127,6 +1583,7 @@ async function renderDashboard(){
                 <div class="kpi-row py-1.5"><span class="text-sm">🎯 <b>Product Target</b></span><span class="text-sm text-right font-medium"><b>${bestProduct.Branch}</b> <span class="text-emerald-600 font-bold">(${bestProduct.Product>0?'+':''}${(bestProduct.Product*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🗑️ <b>Best Wastage</b></span><span class="text-sm text-right font-medium"><b>${bestWaste.Branch}</b> <span class="text-blue-600 font-bold">(${(bestWaste.Waste*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">💷 <b>Lowest Labour %</b></span><span class="text-sm text-right font-medium"><b>${bestLabour.Branch}</b> <span class="text-indigo-600 font-bold">(${(bestLabour.Labour*100).toFixed(1)}%)</span></span></div>
+ <div class="kpi-row py-1.5"><span class="text-sm">💰 <b>Best ATV</b></span><span class="text-sm text-right font-medium"><b>${bestATV.Branch}</b> <span class="text-emerald-600 font-bold">(£${(bestATV.ATV).toFixed(2)})</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">📋 <b>Top Audit</b></span><span class="text-sm text-right font-medium"><b>${bestAudit.Branch}</b> <span class="text-emerald-600 font-bold">(${(auditMap.get(bestAudit.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%)</span></span></div>
               </div>
             </div>
@@ -1185,9 +1642,10 @@ async function renderDashboard(){
     const buildSubPodium = (title, metric, asc, fmt, displayMode) => {
       const ranked = rankMetric(metric, asc);
       const formatVal = (val) => {
-        if (displayMode === 'currency') return '£' + (val || 0).toFixed(2);
-        return ((val || 0) * 100).toFixed(fmt) + '%';
-      };
+ if (displayMode === 'currency') return '£' + (val || 0).toFixed(2);
+ if (displayMode === 'whole') return (val || 0).toFixed(0);
+ return ((val || 0) * 100).toFixed(fmt) + '%';
+ };
       return `
         <div class="card p-4 text-center">
           <h4 class="text-xs font-black muted uppercase mb-3">${title}</h4>
@@ -1231,17 +1689,70 @@ async function renderDashboard(){
           ${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}
           ${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}
           ${buildSubPodium('Audit Standings', 'aAvg', false, 1, 'percent')}
-        </div>
+ ${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}
+ </div>
       </div>`;
   }
 
-  if(currentView === 'leaderboard'){
-    const sorted = curr.sort((a,b)=>(b.Sales*100)-(a.Sales*100)); 
-    const rows = sorted.map((r, i) => {
-      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50"><td class="p-3 font-black">${i+1}</td><td class="p-3 font-bold">${r.Branch}</td><td class="p-3 text-slate-500">${r.AM}</td><td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td><td class="p-3">${(r.Labour*100).toFixed(1)}%</td><td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td></tr>`;
-    }).join('');
-    document.getElementById('mainView').innerHTML = `<div class="card overflow-x-auto"><table class="w-full text-left"><thead><tr><th class="p-3">Rank</th><th class="p-3">Store</th><th class="p-3">Area</th><th class="p-3">Sales</th><th class="p-3">Labour</th><th class="p-3">Audit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  if(currentView === 'leaderboard') {
+  // Leaderboard with position change vs previous comparable period
+  const baseWeek = (typeof effectiveWeek !== 'undefined') ? effectiveWeek : latestWkGlobal;
+  let currLB = [];
+  let prevLB = [];
+
+  if(currentTimeFilter === 'latest') {
+    currLB = aggregateData(rawKpis.filter(k => k.Week === baseWeek));
+    prevLB = aggregateData(rawKpis.filter(k => k.Week === (baseWeek - 1)));
+  } else if(currentTimeFilter === 'last4') {
+    currLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek && k.Week > baseWeek - 4));
+    prevLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek - 4 && k.Week > baseWeek - 8));
+  } else {
+    currLB = aggregateData(rawKpis);
+    prevLB = [];
   }
+
+  const currSorted = [...currLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100));
+  const prevSorted = [...prevLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100));
+  const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
+
+  const rows = currSorted.map((r,i)=>{
+    const nowRank = i+1;
+    const wasRank = prevRank.get(r.Branch);
+    let delta = '<span class="text-slate-300 font-black">—</span>';
+    if(wasRank && wasRank !== nowRank) {
+      const diff = wasRank - nowRank;
+      if(diff > 0) delta = `<span class="text-emerald-600 font-black">▲ ${diff}</span>`;
+      else delta = `<span class="text-red-600 font-black">▼ ${Math.abs(diff)}</span>`;
+    }
+
+    return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50">
+      <td class="p-3 font-black">${nowRank}</td>
+      <td class="p-3">${delta}</td>
+      <td class="p-3 font-bold">${r.Branch}</td>
+      <td class="p-3 text-slate-500">${r.AM}</td>
+      <td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td>
+      <td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
+      <td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mainView').innerHTML = `<div class="card overflow-x-auto">
+    <table class="w-full text-left">
+      <thead>
+        <tr>
+          <th class="p-3">Rank</th>
+          <th class="p-3">Δ</th>
+          <th class="p-3">Store</th>
+          <th class="p-3">Area</th>
+          <th class="p-3">Sales</th>
+          <th class="p-3">Labour</th>
+          <th class="p-3">Audit</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
 }
 
 function renderControlPanel() {
