@@ -1,23 +1,22 @@
 {
-  "name": "Birds Retail Audit",
-  "short_name": "BirdsAudit",
-  "description": "Mobile-optimized retail auditing tool with charcoal-green high contrast design.",
-  "start_url": "./index.html",
+  "name": "Birds Executive Hub",
+  "short_name": "BirdsHub",
+  "description": "Executive performance dashboard for the Birds store network.",
+  "start_url": "./index_2.html",
   "display": "standalone",
-  "background_color": "#0b0f14",
-  "theme_color": "#14532d",
+  "background_color": "#F8FAFC",
+  "theme_color": "#00A88E",
   "icons": [
     {
-      "src": "launchericon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "launchericon-192x192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
