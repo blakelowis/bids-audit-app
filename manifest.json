@@ -2,7 +2,7 @@
   "name": "Birds Executive Hub",
   "short_name": "BirdsHub",
   "description": "Executive performance dashboard for the Birds store network.",
-  "start_url": "./index_2.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#F8FAFC",
   "theme_color": "#00A88E",

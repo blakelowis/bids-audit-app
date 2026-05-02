@@ -1,8 +1,7 @@
-const CACHE_NAME = 'birds-hub-cache-v3';
+const CACHE_NAME = 'birds-hub-cache-v4';
 
-// Ensure these filenames match your folder exactly
 const ASSETS_TO_CACHE = [
-  './index_2.html',
+  './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -33,7 +32,7 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       }).catch(() => {
-        // Return cached version if network fails (offline mode)
+        // Keeps the app running even if you're offline
       });
       return cachedResponse || fetchPromise;
     })
