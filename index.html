@@ -7,17 +7,19 @@
   
   <meta name="theme-color" content="#00A88E">
 
-  <!-- CACHE BUSTER: This permanently destroys the old Service Worker so you never get stuck on an old version again -->
+  <!-- PWA Wiring: Manifest & iOS Icon -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
+  <!-- PWA Wiring: Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          registration.unregister();
-          console.log('Nuked old Service Worker cache.');
-        }
-      });
-      caches.keys().then(function(names) {
-        for (let name of names) caches.delete(name);
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(registration) {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, function(err) {
+          console.log('ServiceWorker registration failed: ', err);
+        });
       });
     }
   </script>
