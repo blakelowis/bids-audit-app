@@ -163,7 +163,11 @@
             <span id="activeWeekBadge" class="bg-birds text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">LATEST DATA</span>
             <p id="folderStatus" class="text-slate-500 text-sm italic">Status: Not Anchored</p>
           </div>
-          <p id="ingestStatus" class="text-slate-400 text-xs mt-1 font-bold">—</p>
+          <div class="flex items-center gap-3 mt-1">
+            <p id="ingestStatus" class="text-slate-400 text-xs font-bold">—</p>
+            <button id="viewIngestLogBtn" onclick="openIngestLog()" class="text-slate-400 text-[10px] font-black underline hover:text-slate-600">View Ingest Log</button>
+            <span id="missingWeeksBadge" class="text-[10px] font-black text-amber-600"></span>
+          </div>
         </div>
       </div>
       <div class="flex items-center gap-3">
@@ -236,18 +240,18 @@ function setArchiveWeekOverride(w){
 }
 function clearArchiveWeekOverride(){ archiveWeekOverride = null; renderDashboard(); }
 
-// NEW DATABASE v16 to guarantee absolutely clean wipe out of the old threshold tables.
-const req = indexedDB.open('BirdsExecutiveHub_v16', 1);
+const req = indexedDB.open('BirdsExecutiveHub_v17', 1);
 req.onupgradeneeded = e => {
   const d = e.target.result;
-  if(!d.objectStoreNames.contains('kpi')) d.createObjectStore('kpi', { keyPath: ['Branch','Week'] });
-  if(!d.objectStoreNames.contains('audits')) d.createObjectStore('audits', { keyPath: ['Store', 'Week'] });
+  if(!d.objectStoreNames.contains('kpi')) d.createObjectStore('kpi', { keyPath: ['Branch','Year','Week'] });
+  if(!d.objectStoreNames.contains('audits')) d.createObjectStore('audits', { keyPath: ['Store','Year','Week'] });
   if(!d.objectStoreNames.contains('stores')) d.createObjectStore('stores', { keyPath: 'BranchId' });
   if(!d.objectStoreNames.contains('actions')) d.createObjectStore('actions', { keyPath: 'ActionID', autoIncrement: true });
   if(!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'id' });
   if(!d.objectStoreNames.contains('area_winners_log')) d.createObjectStore('area_winners_log', { keyPath: ['Year','Week'] });
   if(!d.objectStoreNames.contains('area_metric_winners_log')) d.createObjectStore('area_metric_winners_log', { keyPath: ['Year','Week','Metric'] });
   if(!d.objectStoreNames.contains('store_winners_log')) d.createObjectStore('store_winners_log', { keyPath: ['Year','Week','Metric','Branch'] });
+  if(!d.objectStoreNames.contains('ingest_log')) d.createObjectStore('ingest_log', { keyPath: 'id', autoIncrement: true });
 };
 req.onsuccess = async e => { 
     db = e.target.result; 
@@ -257,6 +261,15 @@ req.onsuccess = async e => {
 };
 
 const idbGetAll = (s) => new Promise(res => { const r = db.transaction(s).objectStore(s).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); });
+
+const idbAdd = (s, v) => new Promise(res => {
+  try{
+    const r = db.transaction(s,'readwrite').objectStore(s).add(v);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => res(null);
+  } catch(e){ res(null); }
+});
+
 const idbPut = (s, v) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).put(v); r.onsuccess = () => res(true); r.onerror = (err) => { console.error('DB Put Error', err); res(false); }; });
 const idbClear = (s) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).clear(); r.onsuccess = () => res(true); r.onerror = () => res(false); });
 
@@ -407,7 +420,7 @@ async function recordPersistentWinnersForWeeks(year, weeks){
 
     // Build maps for quick prev lookup (used for Most Improved Store)
     const prevMap = new Map(kpis
-      .filter(k => (k.Year ?? year) === year && k.Week === (week-1) && k.AM !== 'Unassigned')
+      .filter(k => (k.Year ?? year) === (week===1?(year-1):year) && k.Week === (week===1?MAX_WEEK:(week-1)) && k.AM !== 'Unassigned')
       .map(k => [String(k.Branch).trim().toLowerCase(), k]));
 
     // Area composite winner (commercial score) - Sales - Labour
@@ -559,7 +572,7 @@ async function renderHallOfFame(){
           if(!wkKpis.length) continue;
 
           const prevMap = new Map(kpisAll
-            .filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week === (week-1) && k.AM !== 'Unassigned')
+            .filter(k => (k.Year || currentAwardsYear) === (week===1?(currentAwardsYear-1):currentAwardsYear) && k.Week === (week===1?MAX_WEEK:(week-1)) && k.AM !== 'Unassigned')
             .map(k => [String(k.Branch).trim().toLowerCase(), k]));
 
           // Area win (weekly)
@@ -764,7 +777,7 @@ function findCols(rows){
       headers.push(h1 + h2);
     }
     
-    const idxB = headers.findIndex(x => x === 'branch' || x === 'store' || x === 'shop' || x.includes('branchname'));
+    const idxB = headers.findIndex(x => x === 'branch' || x === 'store' || x === 'shop' || x.includes('branchname') || x === 'name');
     
     if(idxB >= 0) {
       let hasSubHeader = rows[r+1] && rows[r+1].some(x => String(x).toLowerCase().includes('actual') || String(x).toLowerCase().includes('target'));
@@ -774,7 +787,7 @@ function findCols(rows){
       return {
         hr: hasSubHeader ? r + 1 : r, 
         idxB: idxB, 
-        idxS: headers.findIndex(x => x.includes('actualsales') || x == 'sales' || x.includes('sales')),
+        idxS: headers.findIndex(x => x.includes('actualsales') || x === 'sales' || x.includes('sales') || x.includes('net')),
         idxP: idxProduct,
         idxW: headers.findIndex(x => x.includes('waste') || x.includes('wastage')), 
         idxL: headers.findIndex(x => x.includes('wages') || x.includes('labour')),
@@ -843,6 +856,120 @@ async function verifyPermission(fileHandle, readWrite) {
     return false;
 }
 
+// --- SMART INGESTION (Week/Year + Missing Weeks + Ingest Log) ---
+const MAX_WEEK = 52;
+let __ingestMem = [];
+let __missingByYear = {};
+function resolveWeekYear(fileName, wb){
+  let week = 0; let year = 0; let evidence = [];
+  const mW = fileName.match(/Wk\s*(\d{1,2})/i);
+  if(mW){ week = parseInt(mW[1],10); evidence.push('filename:Wk'+week); }
+  const mY = fileName.match(/(20\d{2})/);
+  if(mY){ year = parseInt(mY[1],10); evidence.push('filename:'+year); }
+  try{
+    const sheet = wb.Sheets['Report 1 (Detailed)'] || wb.Sheets['Report 1 (Detailed) (Template)'] || wb.Sheets[wb.SheetNames[0]];
+    if(sheet){
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+      for(let r=0;r<Math.min(rows.length,25);r++){
+        const row = rows[r]||[];
+        for(let c=0;c<Math.min(row.length,25);c++){
+          const cell = String(row[c]||'').trim();
+          if(!week){
+            const mw2 = cell.match(/\bWeek\s*(\d{1,2})\b/i);
+            if(mw2){ week = parseInt(mw2[1],10); evidence.push('sheet:Week'+week); }
+            const mw3 = cell.match(/\bWK\s*(\d{1,2})\b/i);
+            if(mw3){ week = parseInt(mw3[1],10); evidence.push('sheet:WK'+week); }
+          }
+          if(!year){
+            const my2 = cell.match(/\b(20\d{2})\b/);
+            if(my2){ year = parseInt(my2[1],10); evidence.push('sheet:'+year); }
+            const my3 = cell.match(/\bWK\s*\d{1,2}\s*(\d{2})\b/i);
+            if(my3){ year = 2000 + parseInt(my3[1],10); evidence.push('sheet:WKyy->'+year); }
+          }
+          if(week && year) break;
+        }
+        if(week && year) break;
+      }
+    }
+  }catch(e){}
+  if(week && (week<1 || week>MAX_WEEK)) week = 0;
+  if(year && year<2000) year = 0;
+  return {week:week, year:year, evidence:evidence.join(',')};
+}
+function prevPair(week, year){ if(week===1) return {week:MAX_WEEK, year:year-1}; return {week:week-1, year:year}; }
+function backPairs(week, year, count){ const out=[]; let w=week,y=year; for(let i=0;i<count;i++){ out.push({week:w,year:y}); const p=prevPair(w,y); w=p.week; y=p.year; } return out; }
+async function logIngest(entry){
+  const e = Object.assign({ts:Date.now()}, entry||{});
+  __ingestMem.unshift(e); __ingestMem = __ingestMem.slice(0,400);
+  try{ if(db && db.objectStoreNames.contains('ingest_log')) await idbAdd('ingest_log', e); }catch(err){}
+}
+async function loadIngestLog(){
+  try{ if(!db || !db.objectStoreNames.contains('ingest_log')) return __ingestMem;
+    const all = await idbGetAll('ingest_log'); all.sort((a,b)=>(b.ts||0)-(a.ts||0));
+    __ingestMem = all.slice(0,400); return __ingestMem;
+  }catch(e){ return __ingestMem; }
+}
+function computeMissingWeeks(seenByYear){
+  const missing = {};
+  Object.keys(seenByYear||{}).forEach(y=>{
+    const set = seenByYear[y];
+    const arr = Array.from(set||[]).sort((a,b)=>a-b);
+    const max = arr.length ? arr[arr.length-1] : 0;
+    const miss = [];
+    for(let w=1; w<=max; w++){ if(!set.has(w)) miss.push(w); }
+    if(miss.length) missing[y]=miss;
+  });
+  return missing;
+}
+function formatMissingBadge(m){
+  const years = Object.keys(m||{}); if(!years.length) return '';
+  const parts = years.map(y=>'Y'+y+': missing '+(m[y]||[]).length+'wk');
+  return '⚠️ ' + parts.join(' • ');
+}
+function buildIngestLogPanelHTML(){
+  const items = (__ingestMem||[]).slice(0,80);
+  const missYears = Object.keys(__missingByYear||{});
+  const missHtml = missYears.length ? missYears.map(y=>{
+    const list = __missingByYear[y]||[];
+    const preview = list.slice(0,30).join(', ');
+    const more = list.length>30 ? ' …(+'+(list.length-30)+')' : '';
+    return '<div class="text-[11px] font-bold text-amber-700">Year '+y+': Missing weeks → <span class="text-slate-700">'+preview+more+'</span></div>';
+  }).join('') : '<div class="text-[11px] font-bold text-emerald-700">No missing weeks detected in scanned years.</div>';
+  const rows = items.map(e=>{
+    const dt = new Date(e.ts||Date.now());
+    const ts = dt.toLocaleString();
+    const wk = e.week ? ('WK '+e.week) : 'WK ?';
+    const yr = e.year ? String(e.year) : 'YYYY?';
+    const kind = e.kind || 'file';
+    const rowsIns = (e.rowsInserted!=null?e.rowsInserted:(e.rows||0));
+    const note = e.note ? (' • '+e.note) : '';
+    const bad = e.error ? (' • ERROR: '+String(e.error).slice(0,120)) : '';
+    return '<div class="flex justify-between gap-3 border-b border-slate-100 py-2 text-[11px]">'+
+      '<div class="min-w-0">'+
+        '<div class="font-black text-slate-800 truncate">'+(e.file||'—')+'</div>'+ 
+        '<div class="text-slate-500 font-bold">'+ts+' • '+kind+' • '+yr+' • '+wk+note+bad+'</div>'+ 
+      '</div>'+ 
+      '<div class="shrink-0 font-black '+(rowsIns>0?'text-emerald-700':'text-slate-400')+'">'+rowsIns+' rows</div>'+ 
+    '</div>';
+  }).join('') || '<div class="text-sm text-slate-500 italic">No ingest log entries yet. Run “Refresh Data”.</div>';
+  return '<div id="ingest-log-panel" class="card p-6 mb-6 border-t-4 border-t-slate-300">'+
+    '<div class="flex justify-between items-center mb-3">'+
+      '<h2 class="text-sm font-black uppercase tracking-widest text-slate-400">Ingestion Log</h2>'+ 
+      '<button onclick="clearIngestLog()" class="export-btn text-xs">Clear</button>'+ 
+    '</div>'+ 
+    '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">'+missHtml+'</div>'+ 
+    '<div class="max-h-[320px] overflow-y-auto pr-2">'+rows+'</div>'+ 
+  '</div>';
+}
+async function clearIngestLog(){
+  try{ __ingestMem=[]; if(db && db.objectStoreNames.contains('ingest_log')) await idbClear('ingest_log'); __missingByYear={}; if(currentView==='control') renderDashboard(); }catch(e){}
+}
+function openIngestLog(){
+  setView('control');
+  setTimeout(()=>{ const el=document.getElementById('ingest-log-panel'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 120);
+}
+// --- end smart ingestion helpers ---
+
 async function syncData() {
   if (!directoryHandle) {
       alert("Please anchor a master folder first using 'Select Master Folder'.");
@@ -877,6 +1004,8 @@ async function syncData() {
 
   const weeksTouched = new Set();
  const yearsTouched = new Set();
+ const seenWeeksByYear = {};
+
   await idbClear('actions'); 
 
   let filesProcessed = 0;
@@ -894,17 +1023,27 @@ async function syncData() {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       
-      const wkMatch = file.name.match(/Wk(\d+)/i);
-      const fileWk = wkMatch ? parseInt(wkMatch[1]) : 0;
-      const yrMatch = file.name.match(/(20\d{2})/);
-      const fileYr = yrMatch ? parseInt(yrMatch[1], 10) : (new Date().getFullYear());
+      const resolved = resolveWeekYear(file.name, wb);
+      const fileWk = resolved.week || 0;
+      const fileYr = resolved.year || (new Date().getFullYear());
       yearsTouched.add(fileYr);
+      if(!seenWeeksByYear[fileYr]) seenWeeksByYear[fileYr] = new Set();
+      if(fileWk) seenWeeksByYear[fileYr].add(fileWk);
       currentAwardsYear = Math.max(currentAwardsYear || fileYr, fileYr);
       if(fileWk) weeksTouched.add(fileWk);
       if(fileWk > latestWkGlobal) latestWkGlobal = fileWk;
 
+      let insertedRows = 0;
+
       if(file.name.toLowerCase().includes('weekly')) {
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets['Report 1 (Detailed)'], {header:1});
+        // AGGRESSIVE SHEET FINDER
+        let weeklySheet = wb.Sheets['Report 1 (Detailed)'] || wb.Sheets['Report 1 (Detailed) (Template)'];
+        if(!weeklySheet) {
+            const possibleName = wb.SheetNames.find(n => n.toLowerCase().includes('report') || n.toLowerCase().includes('detailed'));
+            weeklySheet = possibleName ? wb.Sheets[possibleName] : wb.Sheets[wb.SheetNames[0]];
+        }
+        
+        const rows = weeklySheet ? XLSX.utils.sheet_to_json(weeklySheet, {header:1}) : [];
         const cols = findCols(rows);
         
         if(cols) {
@@ -922,9 +1061,11 @@ async function syncData() {
               ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, 
               Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0
             });
+            insertedRows++;
           }
         }
       }
+      await logIngest({ file: file.name, kind: 'weekly', year: fileYr, week: fileWk, rowsInserted: insertedRows, note: (resolved && resolved.evidence) ? resolved.evidence : '' });
       if(file.name.toLowerCase().includes('scorecard')) {
         const sWk = fileWk > 0 ? fileWk : (latestWkGlobal > 0 ? latestWkGlobal : 1);
         if(sWk) weeksTouched.add(sWk);
@@ -970,6 +1111,9 @@ async function syncData() {
     }
   }
 
+  __missingByYear = computeMissingWeeks(seenWeeksByYear);
+  const b = document.getElementById('missingWeeksBadge');
+  if(b) b.innerText = formatMissingBadge(__missingByYear);
   document.getElementById('ingestStatus').innerText = "Last Updated: " + new Date().toLocaleTimeString();
   await validateAndCorrectData(Array.from(weeksTouched));
  for(const yr of Array.from(yearsTouched)) { await recordPersistentWinnersForWeeks(yr, Array.from(weeksTouched)); }
@@ -1097,8 +1241,21 @@ function aggregateData(dataArray) {
 async function renderTrendsPanel() {
     const validAMs = Array.from(new Set(Array.from(storeMap.values()))).filter(am => am !== 'Unassigned');
     const rawKpisAll = await idbGetAll('kpi');
-    const weeksAll = [...new Set(rawKpisAll.map(k=>k.Week))].sort((a,b)=>a-b);
-    const weeksOptions = weeksAll.map(w => `<option value="${w}" ${archiveWeekOverride===w?'selected':''}>Week ${w}</option>`).join('');
+    const auditsAll = await idbGetAll('audits');
+    
+    const allYears = [...rawKpisAll.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
+    const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
+    
+    const yearKpis = rawKpisAll.filter(k => (k.Year || effectiveYear) === effectiveYear);
+    const yearAudits = auditsAll.filter(a => (a.Year || effectiveYear) === effectiveYear);
+    
+    const allWeeks = new Set([
+        ...yearKpis.map(k => k.Week),
+        ...yearAudits.map(a => a.Week)
+    ]);
+    
+    const existingWeeks = [...allWeeks].sort((a,b)=>a-b);
+    const weeksOptions = existingWeeks.map(w => `<option value="${w}" ${archiveWeekOverride == w ? 'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
 
     document.getElementById('mainView').innerHTML = `
@@ -1117,6 +1274,7 @@ async function renderTrendsPanel() {
                         <option value="Labour">Labour %</option>
                         <option value="ATV">Avg Trans. Val (£)</option>
                         <option value="Energy">Energy (kWh)</option>
+                        <option value="Audit">Audit Score %</option>
                     </select>
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="Network">Network Average</option>
@@ -1139,22 +1297,52 @@ async function renderTrendsPanel() {
 
 async function drawTrendChart() {
     const rawKpis = await idbGetAll('kpi');
-    if(!rawKpis.length) return;
+    const auditsAll = await idbGetAll('audits');
 
     const metric = document.getElementById('trendMetric').value;
     const scope = document.getElementById('trendScope').value;
 
-    const weeks = [...new Set(rawKpis.map(k => k.Week))].sort((a,b) => a - b);
+    const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
+    const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
+    
+    const yearKpis = rawKpis.filter(k => (k.Year || effectiveYear) === effectiveYear);
+    const yearAudits = auditsAll.filter(a => (a.Year || effectiveYear) === effectiveYear);
+
+    const allWeeks = new Set([
+        ...yearKpis.map(k => k.Week),
+        ...yearAudits.map(a => a.Week)
+    ]);
+    
+    if(!allWeeks.size) return;
+
+    const minW = Math.min(...allWeeks);
+    const maxW = Math.max(...allWeeks);
+    const weeks = [];
+    // Generate full timeline to show realistic spans between data points
+    for(let w=minW; w<=maxW; w++) weeks.push(w); 
     
     const dataPoints = weeks.map(w => {
-        let weekData = rawKpis.filter(k => k.Week === w);
-        if (scope !== 'Network') weekData = weekData.filter(k => k.AM === scope);
-        if (scope === 'Network') weekData = weekData.filter(k => k.AM !== 'Unassigned');
-        if(!weekData.length) return null;
-        
-        const avg = weekData.reduce((sum, item) => sum + (item[metric] || 0), 0) / weekData.length;
-        if(['Sales', 'Product', 'Waste', 'Labour'].includes(metric)) return (avg * 100).toFixed(1);
-        return avg.toFixed(2);
+        if(metric === 'Audit') {
+            let weekAudits = yearAudits.filter(a => a.Week === w);
+            if (scope !== 'Network') {
+                weekAudits = weekAudits.filter(a => {
+                    const branchId = String(a.Store).trim().toLowerCase();
+                    return storeMap.get(branchId) === scope;
+                });
+            }
+            if(!weekAudits.length) return null;
+            const avg = weekAudits.reduce((sum, item) => sum + (item.Score || 0), 0) / weekAudits.length;
+            return avg.toFixed(1);
+        } else {
+            let weekData = yearKpis.filter(k => k.Week === w);
+            if (scope !== 'Network') weekData = weekData.filter(k => k.AM === scope);
+            if (scope === 'Network') weekData = weekData.filter(k => k.AM !== 'Unassigned');
+            if(!weekData.length) return null;
+
+            const avg = weekData.reduce((sum, item) => sum + (item[metric] || 0), 0) / weekData.length;
+            if(['Sales', 'Product', 'Waste', 'Labour'].includes(metric)) return (avg * 100).toFixed(1);
+            return avg.toFixed(2);
+        }
     });
 
     const canvas = document.getElementById('trendCanvas');
@@ -1183,7 +1371,8 @@ async function drawTrendChart() {
                 pointRadius: 5,
                 pointHoverRadius: 7,
                 fill: true,
-                tension: 0.3
+                tension: 0.3,
+                spanGaps: true // Enables drawing continuous lines across missing weeks
             }]
         },
         options: {
@@ -1213,7 +1402,7 @@ async function drawTrendChart() {
                     callbacks: {
                         label: function(context) {
                             let val = context.parsed.y;
-                            if(['Sales', 'Product', 'Waste', 'Labour'].includes(metric)) return val + '%';
+                            if(['Sales', 'Product', 'Waste', 'Labour', 'Audit'].includes(metric)) return val + '%';
                             if(metric === 'ATV') return '£' + val;
                             return val + ' kWh';
                         }
@@ -1233,9 +1422,12 @@ async function renderDashboard(){
   const allAudits = await idbGetAll('audits'); 
   const allActions = await idbGetAll('actions');
 
-  if(!rawKpis.length && currentView !== 'control') return;
+  const combinedData = [...rawKpis, ...allAudits];
+  if(!combinedData.length && currentView !== 'control') return;
   
-  latestWkGlobal = Math.max(...rawKpis.map(k => k.Week));
+  const effectiveYear = combinedData.length ? Math.max(...combinedData.map(k => (k.Year || currentAwardsYear || new Date().getFullYear()))) : new Date().getFullYear();
+  latestWkGlobal = combinedData.length ? Math.max(...combinedData.filter(k => (k.Year || effectiveYear) === effectiveYear).map(k => k.Week)) : 0;
+  
   let effectiveWeek = (archiveWeekOverride && Number.isFinite(archiveWeekOverride)) ? archiveWeekOverride : latestWkGlobal;
   
   updateActiveWeekBadge(effectiveWeek);
@@ -1245,8 +1437,8 @@ async function renderDashboard(){
   let currActions = [], prevActions = [];
   
   if (currentTimeFilter === 'latest') {
-      curr = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek));
-      prev = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek - 1));
+      curr = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek && (k.Year || effectiveYear) === effectiveYear));
+      { const p = prevPair(effectiveWeek, effectiveYear); prev = aggregateData(rawKpis.filter(k => k.Week === p.week && (k.Year || p.year) === p.year)); }
       currAudits = allAudits.filter(a => a.Week === effectiveWeek);
       prevAudits = allAudits.filter(a => a.Week === effectiveWeek - 1);
       currActions = allActions.filter(a => a.Week === effectiveWeek);
@@ -1746,6 +1938,7 @@ function renderControlPanel() {
     document.getElementById('mainView').innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="col-span-1">
+                ${buildIngestLogPanelHTML()}
                 <div class="card p-6 mb-6">
                     <h2 class="text-xl font-black birds-green mb-4">Add New Store</h2>
                     <p class="text-xs text-slate-500 mb-4">Add an upcoming store to allocate it to an Area Manager immediately.</p>
