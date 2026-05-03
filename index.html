@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Birds Executive Hub</title>
+  <title>Birds Executive Hub - v26 Improvement Edition</title>
   
   <meta name="theme-color" content="#00A88E">
 
@@ -116,7 +116,7 @@
       --panel: rgba(255,255,255,.86);
       --ink: #0f172a;
       --muted: #64748b;
-      --line: rgba(15,23,42,.08);
+      --line: rgba(15,23,42,.06);
       --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 20px 40px rgba(0,0,0,0.04);
       --shadow-soft: 0 10px 30px rgba(15,23,42,0.06);
       --brand: #00A88E;
@@ -240,7 +240,7 @@ function setArchiveWeekOverride(w){
 }
 function clearArchiveWeekOverride(){ archiveWeekOverride = null; renderDashboard(); }
 
-const req = indexedDB.open('BirdsExecutiveHub_v17', 1);
+const req = indexedDB.open('BirdsExecutiveHub_v26', 1);
 req.onupgradeneeded = e => {
   const d = e.target.result;
   if(!d.objectStoreNames.contains('kpi')) d.createObjectStore('kpi', { keyPath: ['Branch','Year','Week'] });
@@ -374,6 +374,11 @@ async function validateAndCorrectData(weeksTouched){
       fixed.Labour = _fixRatio(rec.Labour, {allowNegative:false});
       fixed.ATV = _fixATV(rec.ATV);
       fixed.Energy = _fixEnergy(rec.Energy);
+      
+      fixed.FilledRolls = _fixRatio(rec.FilledRolls, {allowNegative:true});
+      fixed.Sandwiches = _fixRatio(rec.Sandwiches, {allowNegative:true});
+      fixed.HotRolls = _fixRatio(rec.HotRolls, {allowNegative:true});
+      fixed.HotBev = _fixRatio(rec.HotBev, {allowNegative:true});
 
       await idbPut('kpi', fixed);
     }
@@ -411,53 +416,54 @@ async function validateAndCorrectData(weeksTouched){
 let currentAwardsYear = new Date().getFullYear();
 let currentAwardsPeriod = 'ytd';
 
+// --- THE NEW v26 IMPROVEMENT (DELTA) ENGINE ---
 async function recordPersistentWinnersForWeeks(year, weeks){
   const kpis = await idbGetAll('kpi');
+  const validAMs = AM_LIST.filter(a => a !== 'Unassigned');
 
   for(const week of weeks){
     const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week && k.AM !== 'Unassigned');
     if(!wkKpis.length) continue;
 
-    // Build maps for quick prev lookup (used for Most Improved Store)
-    const prevMap = new Map(kpis
-      .filter(k => (k.Year ?? year) === (week===1?(year-1):year) && k.Week === (week===1?MAX_WEEK:(week-1)) && k.AM !== 'Unassigned')
-      .map(k => [String(k.Branch).trim().toLowerCase(), k]));
+    const pWk = week === 1 ? 52 : week - 1;
+    const pYr = week === 1 ? year - 1 : year;
+    const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
 
-    // Area composite winner (commercial score) - Sales - Labour
-    const areaEff = AM_LIST.filter(a=>a!=='Unassigned').map(am => {
-      const stores = wkKpis.filter(k=>k.AM===am);
-      if(!stores.length) return null;
-      const avgS = stores.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/stores.length;
-      const avgL = stores.reduce((a,b)=>a+(_finiteOr0(b.Labour)),0)/stores.length;
-      return { am, score: (avgS*100) - (avgL*100) };
-    }).filter(Boolean).sort((a,b)=>b.score-a.score);
-
-    if(areaEff[0]){
-      await idbPut('area_winners_log', { Year: year, Week: week, Winner: areaEff[0].am, Score: areaEff[0].score });
-    }
-
-    // Area of the Week: ATV (highest average ATV across stores in area)
-    const areaATV = AM_LIST.filter(a=>a!=='Unassigned').map(am => {
-      const stores = wkKpis.filter(k=>k.AM===am);
-      if(!stores.length) return null;
-      const avgATV = stores.reduce((a,b)=>a+(_finiteOr0(b.ATV)),0)/stores.length;
-      return { am, score: avgATV };
-    }).filter(Boolean).sort((a,b)=>b.score-a.score);
-    if(areaATV[0]){
-      await idbPut('area_metric_winners_log', { Year: year, Week: week, Metric: 'ATV', Winner: areaATV[0].am, Score: areaATV[0].score });
-    }
-
-    // Medal awarding per KPI category (30 Store Awards: 6 Metrics * 5 Areas)
     const metrics = [
-      { id: 'Sales', order: 'desc' },
-      { id: 'Waste', order: 'asc' },
-      { id: 'Labour', order: 'asc' },
-      { id: 'Product', order: 'desc' },
-      { id: 'ATV', order: 'desc' },
-      { id: 'Energy', order: 'asc' }
+      { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
+      { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
+      { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' }
     ];
-    
-    const validAMs = AM_LIST.filter(a => a !== 'Unassigned');
+
+    const areaImprovementPoints = {};
+    validAMs.forEach(am => areaImprovementPoints[am] = 0);
+
+    // Rank Areas 1st-5th based on Improvement Gains
+    metrics.forEach(m => {
+      const areaDeltas = validAMs.map(am => {
+        const curr = wkKpis.filter(k => k.AM === am);
+        const prev = prevKpis.filter(k => k.AM === am);
+        if(!curr.length || !prev.length) return { am, gain: 0 };
+        
+        const cAvg = curr.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / curr.length;
+        const pAvg = prev.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / prev.length;
+        
+        const gain = m.order === 'desc' ? (cAvg - pAvg) : (pAvg - cAvg);
+        return { am, gain };
+      });
+
+      areaDeltas.sort((a,b) => b.gain - a.gain);
+      areaDeltas.forEach((item, idx) => {
+        areaImprovementPoints[item.am] += (5 - idx);
+      });
+    });
+
+    const winner = Object.entries(areaImprovementPoints).sort((a,b) => b[1] - a[1])[0];
+    if(winner) {
+      await idbPut('area_winners_log', { Year: year, Week: week, Winner: winner[0], Score: winner[1] });
+    }
+
+    // Individual Store Medals (Ranked by raw absolute performance)
     for(const am of validAMs){
       const areaStores = wkKpis.filter(k => k.AM === am);
       for(const m of metrics){
@@ -466,23 +472,6 @@ async function recordPersistentWinnersForWeeks(year, weeks){
         if(sorted[0]) await idbPut('store_winners_log', { Year: year, Week: week, Metric: m.id, Branch: sorted[0].Branch });
       }
     }
-
-    // 1 Most Improved Store Medal (Network Wide) -> makes 31 store medals per week total
-    let bestImproved = null;
-    let maxImprovement = -Infinity;
-    for(const rec of wkKpis){
-       const key = String(rec.Branch).trim().toLowerCase();
-       const prev = prevMap.get(key);
-       if(prev){ 
-          const imp = _finiteOr0(rec.Sales) - _finiteOr0(prev.Sales);
-          if(imp > maxImprovement && imp > 0){
-             maxImprovement = imp;
-             bestImproved = rec;
-          }
-       }
-    }
-    if(bestImproved) await idbPut('store_winners_log', { Year: year, Week: week, Metric: 'Most Improved', Branch: bestImproved.Branch });
-
   }
 }
 
@@ -495,13 +484,29 @@ function _periodWeeks(period, latestWeek){
   return {from:1, to:maxW}; // ytd
 }
 
+
 async function rebuildAwardsFromData(){
-  const year = currentAwardsYear;
-  const allKpis = await idbGetAll('kpi');
-  const yearWeeks = [...new Set(allKpis.filter(k => (k.Year ?? year) === year).map(k=>k.Week))].sort((a,b)=>a-b);
-  await _hardDeleteYearFromLogs(year);
-  await recordPersistentWinnersForWeeks(year, yearWeeks);
-  renderDashboard();
+  try {
+    const year = currentAwardsYear || new Date().getFullYear();
+    const allKpis = await idbGetAll('kpi');
+    if(!allKpis || allKpis.length === 0) {
+      alert("No data found. Please click 'Refresh Data' in the top header first.");
+      return;
+    }
+    const yearWeeks = [...new Set(allKpis.map(k=>k.Week))].sort((a,b)=>a-b);
+    
+    // Clear and reset the awards logs
+    await idbClear('area_winners_log');
+    await idbClear('area_metric_winners_log');
+    await idbClear('store_winners_log');
+    
+    await recordPersistentWinnersForWeeks(year, yearWeeks);
+    renderHallOfFame();
+    alert("Awards Rebuilt Successfully using Improvement Engine!");
+  } catch (err) {
+    console.error("Rebuild Crash:", err);
+    renderDashboard(); 
+  }
 }
 
 async function _hardDeleteYearFromLogs(year){
@@ -535,8 +540,8 @@ async function renderHallOfFame(){
       if(!kpis.length){
         document.getElementById('mainView').innerHTML = `
           <div class="p-20 text-center flex flex-col items-center justify-center">
-            <h2 class="text-2xl font-black outfit text-slate-800 mb-2">New Database Initialized!</h2>
-            <p class="text-slate-500 mb-6">Hit the "🔄 Refresh Data" button at the top to sync your master folder and calculate the new 31-medal distribution.</p>
+            <h2 class="text-2xl font-black outfit text-slate-800 mb-2">v26 Improvement Logic Active!</h2>
+            <p class="text-slate-500 mb-6">Hit the "🔄 Refresh Data" button at the top to sync your master folder and calculate awards based on WoW Gains.</p>
           </div>`;
         return;
       }
@@ -555,9 +560,8 @@ async function renderHallOfFame(){
 
       let periodStores = storeLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
       let periodAreas = areaLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
-      const periodAreaMetrics = areaMetricLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
 
-      // FALLBACK_COMPUTE_FROM_KPI
+      // FALLBACK_COMPUTE_FROM_KPI (Now uses Improvement ranking)
       if(periodStores.length === 0){
         const kpisAll = await idbGetAll('kpi');
         const weeksInRange = [...new Set(kpisAll
@@ -571,30 +575,37 @@ async function renderHallOfFame(){
           const wkKpis = kpisAll.filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week === week && k.AM !== 'Unassigned');
           if(!wkKpis.length) continue;
 
-          const prevMap = new Map(kpisAll
-            .filter(k => (k.Year || currentAwardsYear) === (week===1?(currentAwardsYear-1):currentAwardsYear) && k.Week === (week===1?MAX_WEEK:(week-1)) && k.AM !== 'Unassigned')
-            .map(k => [String(k.Branch).trim().toLowerCase(), k]));
-
-          // Area win (weekly)
-          const areaEff = AM_LIST.filter(a=>a!=='Unassigned').map(am=>{
-            const stores = wkKpis.filter(k=>k.AM===am);
-            if(!stores.length) return null;
-            const avgS = stores.reduce((a,b)=>a+(_finiteOr0(b.Sales)),0)/stores.length;
-            const avgL = stores.reduce((a,b)=>a+(_finiteOr0(b.Labour)),0)/stores.length;
-            return { am, score:(avgS*100)-(avgL*100) };
-          }).filter(Boolean).sort((a,b)=>b.score-a.score);
-          if(areaEff[0]) tmpAreaWins.push({ Year: currentAwardsYear, Week: week, Winner: areaEff[0].am });
+          const pWk = week === 1 ? 52 : week - 1;
+          const pYr = week === 1 ? currentAwardsYear - 1 : currentAwardsYear;
+          const prevKpis = kpisAll.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
 
           const metrics = [
-            { id: 'Sales', order: 'desc' },
-            { id: 'Waste', order: 'asc' },
-            { id: 'Labour', order: 'asc' },
-            { id: 'Product', order: 'desc' },
-            { id: 'ATV', order: 'desc' },
-            { id: 'Energy', order: 'asc' }
+            { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
+            { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
+            { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' }
           ];
 
-          const validAMs = AM_LIST.filter(a => a !== 'Unassigned');
+          const areaPoints = {};
+          const validAMs = AM_LIST.filter(a=>a!=='Unassigned');
+          validAMs.forEach(am => areaPoints[am] = 0);
+
+          metrics.forEach(m => {
+            const deltas = validAMs.map(am => {
+              const curr = wkKpis.filter(k => k.AM === am);
+              const prev = prevKpis.filter(k => k.AM === am);
+              if(!curr.length || !prev.length) return { am, gain: 0 };
+              const cAvg = curr.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / curr.length;
+              const pAvg = prev.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / prev.length;
+              const gain = m.order === 'desc' ? (cAvg - pAvg) : (pAvg - cAvg);
+              return { am, gain };
+            });
+            deltas.sort((a,b) => b.gain - a.gain);
+            deltas.forEach((item, idx) => { areaPoints[item.am] += (5 - idx); });
+          });
+
+          const winner = Object.entries(areaPoints).sort((a,b) => b[1] - a[1])[0];
+          if(winner) tmpAreaWins.push({ Year: currentAwardsYear, Week: week, Winner: winner[0] });
+
           for(const am of validAMs){
             const areaStores = wkKpis.filter(k => k.AM === am);
             for(const m of metrics){
@@ -603,23 +614,6 @@ async function renderHallOfFame(){
               if(sorted[0]) tmpStoreWins.push({ Year: currentAwardsYear, Week: week, Metric: m.id, Branch: sorted[0].Branch });
             }
           }
-
-          // Most Improved (Network Wide)
-          let bestImproved = null;
-          let maxImprovement = -Infinity;
-          for(const rec of wkKpis){
-             const key = String(rec.Branch).trim().toLowerCase();
-             const prev = prevMap.get(key);
-             if(prev){ 
-                const imp = _finiteOr0(rec.Sales) - _finiteOr0(prev.Sales);
-                if(imp > maxImprovement && imp > 0){
-                   maxImprovement = imp;
-                   bestImproved = rec;
-                }
-             }
-          }
-          if(bestImproved) tmpStoreWins.push({ Year: currentAwardsYear, Week: week, Metric: 'Most Improved', Branch: bestImproved.Branch });
-
         }
 
         periodStores = tmpStoreWins;
@@ -637,14 +631,11 @@ async function renderHallOfFame(){
       });
 
       const areaWins = periodAreas.reduce((acc, l)=>{ acc[l.Winner] = (acc[l.Winner]||0)+1; return acc; }, {});
-      // Add ATV Area-of-the-Week wins into the same medal count
-      periodAreaMetrics.filter(l=>l.Metric==='ATV').forEach(l=>{ areaWins[l.Winner] = (areaWins[l.Winner]||0) + 1; });
       const sortedAreas = Object.entries(areaWins).sort((a,b)=>b[1]-a[1]);
 
       const periodLabel = currentAwardsPeriod==='ytd' ? `Year to Date (Wk 1–${latestWeek})` : currentAwardsPeriod.toUpperCase() + ` (Wk ${from}–${to})`;
       const weeksCount = [...new Set(periodStores.map(x=>x.Week))].length;
 
-      // Build the full store leaderboard regardless of whether they have a medal
       const storeStats = [];
       storeMap.forEach((am, branchId) => {
            const origName = originalStoreNames.get(branchId) || branchId;
@@ -677,7 +668,7 @@ async function renderHallOfFame(){
       document.getElementById('mainView').innerHTML = `
     <div id="ytd-card" class="bg-transparent p-1">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-black outfit birds-green uppercase tracking-tight">YTD AWARDS DASHBOARD</h2>
+        <h2 class="text-xl font-black outfit birds-green uppercase tracking-tight">YTD AWARDS DASHBOARD ( WoW Improvement Engine)</h2>
         <div onclick="exportCard('ytd-card','YTD_Awards')" class="export-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
       </div>
       <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
@@ -707,7 +698,7 @@ async function renderHallOfFame(){
             <div class="text-xs font-bold text-slate-600">${topStore ? topStore[1] : 0} medals</div>
           </div>
           <div class="card p-4 border-t-4 border-t-birds-green">
-            <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Area</div>
+            <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Area ( WoW Gains)</div>
             <div class="text-lg font-black birds-green">${topArea ? topArea[0] : '—'}</div>
             <div class="text-xs font-bold text-slate-600">${topArea ? topArea[1] : 0} wins</div>
           </div>
@@ -761,7 +752,7 @@ async function renderHallOfFame(){
     `;
   } catch (err) {
       console.error(err);
-      document.getElementById('mainView').innerHTML = `<div class="p-20 text-center"><h2 class="text-red-500 font-bold text-xl mb-2">YTD Module Error</h2><p class="text-slate-600">The YTD engine crashed. Please try "🔄 Refresh Data" at the top.</p></div>`;
+      document.getElementById('mainView').innerHTML = '<div class="p-20 text-center"><h2 class="text-birds-green font-black text-xl mb-2">Awards Calculation Required</h2><p class="text-slate-600 mb-6">The awards need to be calculated for the new fair improvement version.</p><button onclick="rebuildAwardsFromData()" class="btn-primary">🔁 Run Awards Engine Now</button></div>';
   }
 }
 
@@ -772,8 +763,9 @@ function findCols(rows){
     let headers = [];
     
     for(let c=0; c<maxCols; c++) {
-      let h1 = String(rows[r][c] || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-      let h2 = (rows[r+1] && rows[r+1][c]) ? String(rows[r+1][c] || '').toLowerCase().replace(/[^a-z0-9]+/g, '') : '';
+      // Keep the % sign so we can hunt for it accurately
+      let h1 = String(rows[r][c] || '').toLowerCase().replace(/[^a-z0-9%]+/g, '');
+      let h2 = (rows[r+1] && rows[r+1][c]) ? String(rows[r+1][c] || '').toLowerCase().replace(/[^a-z0-9%]+/g, '') : '';
       headers.push(h1 + h2);
     }
     
@@ -781,18 +773,34 @@ function findCols(rows){
     
     if(idxB >= 0) {
       let hasSubHeader = rows[r+1] && rows[r+1].some(x => String(x).toLowerCase().includes('actual') || String(x).toLowerCase().includes('target'));
+      
+      // STRICT FINDERS TO AVOID RAW CURRENCY
+      let idxS = headers.findIndex(x => x.includes('salesdifference'));
+      if(idxS === -1) {
+          let actS = headers.findIndex(x => x.includes('actualsales') || x === 'sales');
+          if(actS !== -1 && headers[actS+1] && headers[actS+1].includes('difference')) idxS = actS + 1;
+      }
+      
+      let idxL = headers.findIndex(x => x.includes('wagesasa%') || x.includes('wagesas') || x.includes('labour%') || x.includes('wages%'));
       const baseProduct = headers.findIndex(x => x.includes('producttarget'));
-      const idxProduct = baseProduct >= 0 ? baseProduct + 2 : -1;
+      const baseFR = headers.findIndex(x => x.includes('filledrollsactual') || x.includes('filledrolls'));
+      const baseSW = headers.findIndex(x => x.includes('sandwichesactual') || x.includes('sandwiches'));
+      const baseHR = headers.findIndex(x => x.includes('filledrollhotactual') || x.includes('filledrollhot'));
+      const baseHB = headers.findIndex(x => x.includes('hotbeverageactual') || x.includes('hotbeverage'));
 
       return {
         hr: hasSubHeader ? r + 1 : r, 
         idxB: idxB, 
-        idxS: headers.findIndex(x => x.includes('actualsales') || x === 'sales' || x.includes('sales') || x.includes('net')),
-        idxP: idxProduct,
-        idxW: headers.findIndex(x => x.includes('waste') || x.includes('wastage')), 
-        idxL: headers.findIndex(x => x.includes('wages') || x.includes('labour')),
+        idxS: idxS,
+        idxP: baseProduct >= 0 ? baseProduct + 2 : -1,
+        idxW: headers.findIndex(x => x.includes('waste%') || x.includes('wastage') || x === 'waste'), 
+        idxL: idxL,
         idxA: headers.findIndex(x => x.includes('atv') && !x.includes('target')), 
-        idxE: headers.findIndex(x => x.includes('energy') || x.includes('green') || x.includes('kwh'))
+        idxE: headers.findIndex(x => x.includes('energy') || x.includes('green') || x.includes('kwh')),
+        idxFR: baseFR >= 0 ? baseFR + 2 : -1,
+        idxSW: baseSW >= 0 ? baseSW + 2 : -1,
+        idxHR: baseHR >= 0 ? baseHR + 2 : -1,
+        idxHB: baseHB >= 0 ? baseHB + 2 : -1
       };
     }
   }
@@ -1036,7 +1044,6 @@ async function syncData() {
       let insertedRows = 0;
 
       if(file.name.toLowerCase().includes('weekly')) {
-        // AGGRESSIVE SHEET FINDER
         let weeklySheet = wb.Sheets['Report 1 (Detailed)'] || wb.Sheets['Report 1 (Detailed) (Template)'];
         if(!weeklySheet) {
             const possibleName = wb.SheetNames.find(n => n.toLowerCase().includes('report') || n.toLowerCase().includes('detailed'));
@@ -1059,7 +1066,11 @@ async function syncData() {
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, 
               Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
               ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, 
-              Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0
+              Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
+              FilledRolls: cols.idxFR >= 0 ? parseVal(r[cols.idxFR]) : 0,
+              Sandwiches: cols.idxSW >= 0 ? parseVal(r[cols.idxSW]) : 0,
+              HotRolls: cols.idxHR >= 0 ? parseVal(r[cols.idxHR]) : 0,
+              HotBev: cols.idxHB >= 0 ? parseVal(r[cols.idxHB]) : 0
             });
             insertedRows++;
           }
@@ -1225,16 +1236,18 @@ function aggregateData(dataArray) {
         const am = storeMap.get(branchId) || 'Unassigned';
         if(am === 'Unassigned') return;
         
-        if(!map.has(d.Branch)) map.set(d.Branch, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0 });
+        if(!map.has(d.Branch)) map.set(d.Branch, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0, FilledRolls:0, Sandwiches:0, HotRolls:0, HotBev:0 });
         let obj = map.get(d.Branch);
         obj.count++;
         obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; 
         obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0;
+        obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
     });
     return Array.from(map.values()).map(o => ({
         Branch: o.Branch, AM: o.AM,
         Sales: o.Sales/o.count, Product: o.Product/o.count, Waste: o.Waste/o.count, 
-        Labour: o.Labour/o.count, ATV: o.ATV/o.count, Energy: o.Energy/o.count
+        Labour: o.Labour/o.count, ATV: o.ATV/o.count, Energy: o.Energy/o.count,
+        FilledRolls: o.FilledRolls/o.count, Sandwiches: o.Sandwiches/o.count, HotRolls: o.HotRolls/o.count, HotBev: o.HotBev/o.count
     }));
 }
 
@@ -1483,6 +1496,16 @@ async function renderDashboard(){
   const pbAvgEnergy = prev.reduce((a,b)=>a+(b.Energy||0),0) / (prev.length || 1);
   const bAvgATV = curr.reduce((a,b)=>a+(b.ATV||0),0) / (curr.length || 1);
   const pbAvgATV = prev.reduce((a,b)=>a+(b.ATV||0),0) / (prev.length || 1);
+  
+  const bAvgFilledRolls = curr.reduce((a,b)=>a+(b.FilledRolls||0),0) / (curr.length || 1);
+  const pbAvgFilledRolls = prev.reduce((a,b)=>a+(b.FilledRolls||0),0) / (prev.length || 1);
+  const bAvgSandwiches = curr.reduce((a,b)=>a+(b.Sandwiches||0),0) / (curr.length || 1);
+  const pbAvgSandwiches = prev.reduce((a,b)=>a+(b.Sandwiches||0),0) / (prev.length || 1);
+  const bAvgHotRolls = curr.reduce((a,b)=>a+(b.HotRolls||0),0) / (curr.length || 1);
+  const pbAvgHotRolls = prev.reduce((a,b)=>a+(b.HotRolls||0),0) / (prev.length || 1);
+  const bAvgHotBev = curr.reduce((a,b)=>a+(b.HotBev||0),0) / (curr.length || 1);
+  const pbAvgHotBev = prev.reduce((a,b)=>a+(b.HotBev||0),0) / (prev.length || 1);
+  
   const bAvgAudit = Array.from(auditMap.values()).reduce((a,b)=>a+(b.Score||0),0) / (auditMap.size || 1);
 
   const calcCriticals = (auditList) => {
@@ -1559,7 +1582,7 @@ async function renderDashboard(){
         <div class="text-right flex gap-4 text-xs font-bold">
           <span class="w-16 text-emerald-600">${(am.sAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Sales</span></span>
           <span class="w-16 text-indigo-600">${(am.lAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Labour</span></span>
-          <span class="w-16 text-slate-700">${am.aAvg.toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Audit</span></span>
+          <span class="w-16 text-blue-600">${(am.wAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Waste</span></span>
         </div>
       </div>
     `).join('');
@@ -1579,14 +1602,44 @@ async function renderDashboard(){
             <div onclick="exportCard('overview-card', 'Overview')" class="export-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
         </div>
         
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div class="card p-3 border-t-2 border-t-orange-400 flex justify-between items-center">
+             <div>
+                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Drinks</p>
+                <h2 class="text-lg font-black ${bAvgHotBev >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotBev*100)>0?'+':''}${(bAvgHotBev*100).toFixed(1)}%</h2>
+             </div>
+             ${getTrendStr(bAvgHotBev, pbAvgHotBev, false, 'percent')}
+          </div>
+          <div class="card p-3 border-t-2 border-t-orange-500 flex justify-between items-center">
+             <div>
+                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Food</p>
+                <h2 class="text-lg font-black ${bAvgHotRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotRolls*100)>0?'+':''}${(bAvgHotRolls*100).toFixed(1)}%</h2>
+             </div>
+             ${getTrendStr(bAvgHotRolls, pbAvgHotRolls, false, 'percent')}
+          </div>
+          <div class="card p-3 border-t-2 border-t-blue-400 flex justify-between items-center">
+             <div>
+                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Sandwiches</p>
+                <h2 class="text-lg font-black ${bAvgSandwiches >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgSandwiches*100)>0?'+':''}${(bAvgSandwiches*100).toFixed(1)}%</h2>
+             </div>
+             ${getTrendStr(bAvgSandwiches, pbAvgSandwiches, false, 'percent')}
+          </div>
+          <div class="card p-3 border-t-2 border-t-blue-500 flex justify-between items-center">
+             <div>
+                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Cold Rolls</p>
+                <h2 class="text-lg font-black ${bAvgFilledRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgFilledRolls*100)>0?'+':''}${(bAvgFilledRolls*100).toFixed(1)}%</h2>
+             </div>
+             ${getTrendStr(bAvgFilledRolls, pbAvgFilledRolls, false, 'percent')}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Sales Growth</p><h2 class="text-xl font-black birds-green">${(bAvgSales*100).toFixed(1)}%</h2>${getTrendStr(bAvgSales, pbAvgSales, false, 'percent')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Product Target</p><h2 class="text-xl font-black birds-green">${(bAvgProduct*100).toFixed(1)}%</h2>${getTrendStr(bAvgProduct, pbAvgProduct, false, 'percent')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Wastage</p><h2 class="text-xl font-black text-slate-700">${(bAvgWaste*100).toFixed(1)}%</h2>${getTrendStr(bAvgWaste, pbAvgWaste, true, 'percent')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Labour %</p><h2 class="text-xl font-black text-slate-700">${(bAvgLabour*100).toFixed(1)}%</h2>${getTrendStr(bAvgLabour, pbAvgLabour, true, 'percent')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Avg Trans. Val</p><h2 class="text-xl font-black text-slate-700">£${(bAvgATV).toFixed(2)}</h2>${getTrendStr(bAvgATV, pbAvgATV, false, 'currency')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Energy (kWh)</p><h2 class="text-xl font-black text-slate-700">${(bAvgEnergy).toFixed(0)}</h2>${getTrendStr(bAvgEnergy, pbAvgEnergy, true, 'whole')}</div>
-          <div class="card p-4 text-center" style="background:rgba(0,168,142,.06)"><p class="text-[9px] font-bold text-emerald-700 uppercase letter">Audit score</p>${ringSVG(bAvgAudit)}</div>
         </div>
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1641,6 +1694,17 @@ async function renderDashboard(){
             </div>
           </div>
         </div>
+
+        <div class="mt-6 card p-6 border-t-4 border-t-emerald-500 bg-emerald-50 flex flex-col md:flex-row items-center justify-between">
+           <div>
+              <h3 class="font-black outfit text-emerald-800 text-lg uppercase mb-1">Network Audit Score</h3>
+              <p class="text-xs text-emerald-600 font-bold">Overall network compliance & standards</p>
+           </div>
+           <div class="flex items-center gap-4">
+              ${ringSVG(bAvgAudit)}
+           </div>
+        </div>
+
       </div>`;
   }
 
@@ -1801,8 +1865,6 @@ async function renderDashboard(){
       return {name:a.am, change:(a.sAvg - prevAvg)};
     }).sort((a,b)=>b.change-a.change)[0];
 
-    const improvedAreaHtml = `<div class="card p-4 text-center mb-4"><h4 class="text-xs font-black muted uppercase mb-1">🚀 Most Improved Area</h4><div class="text-base font-black birds-green">🥇 ${improvedArea?.name || '-'}</div><div class="text-xs text-emerald-600 font-bold">+${((improvedArea?.change||0)*100).toFixed(1)}%</div></div>`;
-
     const rankMetric = (metric, asc) => [...amStatsGlobal].sort((a,b) => asc ? a[metric] - b[metric] : b[metric] - a[metric]).slice(0,3);
     const buildSubPodium = (title, metric, asc, fmt, displayMode) => {
       const ranked = rankMetric(metric, asc);
@@ -1829,7 +1891,7 @@ async function renderDashboard(){
     }).sort((a,b)=>b.change-a.change)[0];
 
     const improvedStoreHtml = `
-    <div class="card p-4 text-center mb-6">
+    <div class="card p-4 text-center mb-6 border-t-4 border-t-amber-400">
       <h4 class="text-xs font-black muted uppercase mb-1">🏬 Most Improved Store</h4>
       <div class="text-base font-black birds-green">🥇 ${improvedStore?.name || '-'}</div>
       <div class="text-xs text-emerald-600 font-bold">+${((improvedStore?.change||0)*100).toFixed(1)}%</div>
@@ -1838,7 +1900,6 @@ async function renderDashboard(){
 
     document.getElementById('mainView').innerHTML = `
       <div id="winners-card" class="pb-2">
-        ${improvedAreaHtml}
         ${improvedStoreHtml}
         <div class="card p-8 mb-6 text-center relative">
           <h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2>
@@ -1853,8 +1914,7 @@ async function renderDashboard(){
           ${buildSubPodium('Product Target', 'pAvg', false, 1, 'percent')}
           ${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}
           ${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}
-          ${buildSubPodium('Audit Standings', 'aAvg', false, 1, 'percent')}
- ${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}
+          ${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}
  </div>
       </div>`;
   }
