@@ -203,9 +203,28 @@ const DEFAULT_AREA_MAPPING = {
   'Craig White': ['Alfreton','Arnold','Beeston','Ilkeston','Lister Gate','Listergate','Long Eaton','Mansfield','Mapperley','Teal Park','West Bridgford','Wollaton'],
   'Paul Reeves': ['Allenton','Alvaston','Belper','Duffield','Eastwood','Heanor','Hucknall','Mackworth','Matlock','Ripley','Sinfin','Spondon'],
   'Suzanne Green': ['Albert Street','Ashbourne','Bakery Shop','Borrowash','Chaddesden','Chellaston','Derbion Crown Walk','Littleover','Melbourne','Mickleover','Oakwood','Park Farm'],
-  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Burton Expresso','Coalville','East Leake','Keyworth','Lichfield','Loughborough','Stretton','Swadlincote','Uttoxeter']
+  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Coalville','East Leake','Keyworth','Lichfield','Loughborough','Stretton','Swadlincote','Uttoxeter']
 };
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
+
+// --- Store Normalisation (Aliases / Canonical Names) ---
+// Use this to merge inconsistent naming across source files (e.g., Burton vs Burton Expresso)
+const STORE_ALIASES = {
+  'burton expresso': 'burton',
+  'burton espresso': 'burton'
+};
+function _titleCaseWords(s){
+  return String(s||'').split(/\s+/).filter(Boolean).map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+}
+function normaliseStoreId(name){
+  let id = String(name||'').trim().toLowerCase().replace(/\s+/g,' ');
+  return STORE_ALIASES[id] || id;
+}
+function canonicalStoreName(name){
+  const id = normaliseStoreId(name);
+  return (originalStoreNames && originalStoreNames.get(id)) || _titleCaseWords(id);
+}
+
 
 let db, currentView = 'overview', latestWkGlobal = 0;
 let directoryHandle = null; 
@@ -411,6 +430,40 @@ async function validateAndCorrectData(weeksTouched){
 }
 
 
+
+
+
+async function mergeAliasRecords(weeksTouched){
+  try{
+    const wkSet = new Set(Array.isArray(weeksTouched)?weeksTouched:[]);
+    const kpis = await idbGetAll('kpi');
+    for(const rec of kpis){
+      if(wkSet.size && !wkSet.has(rec.Week)) continue;
+      const canonId = normaliseStoreId(rec.Branch);
+      const canonName = canonicalStoreName(rec.Branch);
+      const rawId = String(rec.Branch||'').trim().toLowerCase().replace(/\s+/g,' ');
+      if(canonId !== rawId || canonName !== String(rec.Branch||'').trim()) {
+        const newRec = { ...rec, Branch: canonName, AM: storeMap.get(canonId) || rec.AM || 'Unassigned' };
+        await idbPut('kpi', newRec);
+        await idbDelete('kpi', [rec.Branch, rec.Year, rec.Week]);
+      }
+    }
+    const audits = await idbGetAll('audits');
+    for(const rec of audits){
+      if(wkSet.size && !wkSet.has(rec.Week)) continue;
+      const canonId = normaliseStoreId(rec.Store);
+      const canonName = canonicalStoreName(rec.Store);
+      const rawId = String(rec.Store||'').trim().toLowerCase().replace(/\s+/g,' ');
+      if(canonId !== rawId || canonName !== String(rec.Store||'').trim()) {
+        const newRec = { ...rec, Store: canonName };
+        await idbPut('audits', newRec);
+        await idbDelete('audits', [rec.Store, rec.Year, rec.Week]);
+      }
+    }
+  }catch(e){
+    console.warn('Alias merge failed:', e);
+  }
+}
 
 // --- Persistent Awards (YTD / Quarterly) ---
 let currentAwardsYear = new Date().getFullYear();
@@ -1058,9 +1111,11 @@ async function syncData() {
             const r = rows[i]; 
             if(!r || !r[cols.idxB] || String(r[cols.idxB]).toLowerCase().includes('total')) continue;
             
-            let branchId = String(r[cols.idxB]).trim().toLowerCase();
-            await idbPut('kpi', {
-              Branch: String(r[cols.idxB]).trim(), Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
+            let rawBranchName = String(r[cols.idxB]).trim();
+ let branchId = normaliseStoreId(rawBranchName);
+ let branchName = canonicalStoreName(rawBranchName);
+ await idbPut('kpi', {
+ Branch: branchName, Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
               Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, 
               Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, 
@@ -1085,8 +1140,9 @@ async function syncData() {
             const json = XLSX.utils.sheet_to_json(wb.Sheets['Scorecards']);
             for(const r of json) {
               if(r.Store) {
-                await idbPut('audits', {
-                  Store: String(r.Store).trim(), Week: sWk, Year: fileYr,
+                const rawStoreName = String(r.Store).trim();
+ await idbPut('audits', {
+ Store: canonicalStoreName(rawStoreName), Week: sWk, Year: fileYr,
  Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1),
                   Food: parseVal(r['Food safety']), Fire: parseVal(r['Fire safety']), HandS: parseVal(r['HandS ']), 
                   Journey: parseVal(r['Customer journey']), Coffee: parseVal(r['Coffee']), Focus: parseVal(r['Birds focus'])
@@ -1232,7 +1288,7 @@ function changeTimeFilter(val) {
 function aggregateData(dataArray) {
     const map = new Map();
     dataArray.forEach(d => {
-        const branchId = d.Branch.trim().toLowerCase();
+        const branchId = normaliseStoreId(d.Branch);
         const am = storeMap.get(branchId) || 'Unassigned';
         if(am === 'Unassigned') return;
         
@@ -1339,7 +1395,7 @@ async function drawTrendChart() {
             let weekAudits = yearAudits.filter(a => a.Week === w);
             if (scope !== 'Network') {
                 weekAudits = weekAudits.filter(a => {
-                    const branchId = String(a.Store).trim().toLowerCase();
+                    const branchId = normaliseStoreId(a.Store);
                     return storeMap.get(branchId) === scope;
                 });
             }
@@ -1472,7 +1528,7 @@ async function renderDashboard(){
   
   const aggAudits = new Map();
   currAudits.forEach(a => {
-      const id = a.Store.trim().toLowerCase();
+      const id = normaliseStoreId(a.Store);
       if(!aggAudits.has(id)) aggAudits.set(id, {Store: a.Store, count:0, Score:0, Food:0, Fire:0, HandS:0, Journey:0, Coffee:0, Focus:0});
       const obj = aggAudits.get(id);
       obj.count++; obj.Score += a.Score||0; obj.Food += a.Food||0; obj.Fire += a.Fire||0;
@@ -1748,8 +1804,8 @@ async function renderDashboard(){
       const bestEnergy = stores.reduce((p, c) => safeMin(p, c, 'Energy'));
       const bestATV = stores.reduce((p, c) => safeMax(p, c, 'ATV'));
       const bestAudit = stores.reduce((p, c) => {
-        const pScore = auditMap.get(p.Branch.trim().toLowerCase())?.Score || 0;
-        const cScore = auditMap.get(c.Branch.trim().toLowerCase())?.Score || 0;
+        const pScore = auditMap.get(normaliseStoreId(p.Branch))?.Score || 0;
+        const cScore = auditMap.get(normaliseStoreId(c.Branch))?.Score || 0;
         return pScore > cScore ? p : c;
       });
 
