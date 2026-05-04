@@ -13,7 +13,7 @@
 
   <!-- PWA Wiring: Service Worker Registration -->
   <script>
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('./sw.js').then(function(registration) {
           console.log('ServiceWorker registration successful with scope: ', registration.scope);
@@ -324,11 +324,7 @@ function parseVal(v){
 }
 
 function normaliseStoreId(name){
-  if(!name) return '';
-  return String(name)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
+  return String(name||'').trim().toLowerCase();
 }
 
 
@@ -437,6 +433,23 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     const pWk = week === 1 ? 52 : week - 1;
     const pYr = week === 1 ? year - 1 : year;
     const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
+
+
+  // === GLOBAL Most Improved Store (Sales WoW, ONE winner per week) ===
+  try{
+    const prevById = new Map(prevKpis.map(p=>[normaliseStoreId(p.Branch), p]));
+    let bestMI = null;
+    for(const c of wkKpis){
+      const p = prevById.get(normaliseStoreId(c.Branch));
+      if(!p) continue;
+      const delta = (_finiteOr0(c.Sales) - _finiteOr0(p.Sales));
+      if(!bestMI || delta > bestMI.delta) bestMI = { Branch: c.Branch, delta };
+    }
+    if(bestMI && bestMI.delta > 0){
+      await idbPut('store_winners_log', { Year: year, Week: week, Metric: 'MostImproved', Branch: bestMI.Branch });
+    }
+  }catch(e){ console.warn('MostImproved skipped', e); }
+
 
     const metrics = [
       { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
@@ -914,14 +927,6 @@ function resolveWeekYear(fileName, wb){
   return {week:week, year:year, evidence:evidence.join(',')};
 }
 function prevPair(week, year){ if(week===1) return {week:MAX_WEEK, year:year-1}; return {week:week-1, year:year}; }
-// === GLOBAL MOST IMPROVED (NETWORK) MEDAL LOOKUP ===
-async function getGlobalMostImprovedForWeek(year, week){
-  try{
-    const wins = await idbGetAll('store_winners_log');
-    return wins.find(w => w.Year === year && w.Week === week && w.Metric === 'MostImproved') || null;
-  }catch(e){ return null; }
-}
-
 function backPairs(week, year, count){ const out=[]; let w=week,y=year; for(let i=0;i<count;i++){ out.push({week:w,year:y}); const p=prevPair(w,y); w=p.week; y=p.year; } return out; }
 async function logIngest(entry){
   const e = Object.assign({ts:Date.now()}, entry||{});
@@ -1461,10 +1466,12 @@ async function renderDashboard(){
   let effectiveWeek = (archiveWeekOverride && Number.isFinite(archiveWeekOverride)) ? archiveWeekOverride : latestWkGlobal;
   
   updateActiveWeekBadge(effectiveWeek);
-  // GLOBAL Most Improved Store medal (network-wide, visual only)
-  const globalMI = (currentTimeFilter === 'latest')
-    ? await getGlobalMostImprovedForWeek(effectiveYear, effectiveWeek)
-    : null;
+// Lookup the Most Improved Store winner for this week (from medals log)
+let globalMostImprovedWin = null;
+try{
+  const wins = await idbGetAll('store_winners_log');
+  globalMostImprovedWin = wins.find(w => w && w.Metric === 'MostImproved' && w.Week === effectiveWeek && (w.Year || effectiveYear) === effectiveYear) || null;
+}catch(e){}
 
   
   let curr = [], prev = [];
@@ -1792,6 +1799,18 @@ async function renderDashboard(){
       const alertTextCol = isRedAlert ? 'text-red-600' : 'text-slate-600';
 
       let badges = '';
+
+ // Add global Most Improved badge to the winning Area card (for this week)
+ try{
+   if(globalMostImprovedWin && globalMostImprovedWin.Branch){
+     const miId = normaliseStoreId(globalMostImprovedWin.Branch);
+     const miAM = storeMap.get(miId);
+     if(miAM === am){
+       badges += `<span class="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🏅 MOST IMPROVED: ${globalMostImprovedWin.Branch}</span>`;
+     }
+   }
+ }catch(e){}
+
       if (am === overallWinner) badges += `<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded shadow-sm mr-1">👑 OVERALL CHAMPION</span>`;
       if (am === bestSalesAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Sales</span>`;
       if (am === bestProductAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Product</span>`;
@@ -1830,12 +1849,6 @@ async function renderDashboard(){
 
               <h4 class="text-[11px] font-black muted uppercase mb-3 flex items-center gap-2"><div class="w-1 h-3 bg-emerald-500 rounded-full"></div> Area Top Performers</h4>
               <div class="space-y-1 bg-white rounded-xl border border-slate-100 p-3 shadow-sm">
-${(globalMI && storeMap.get(normaliseStoreId(globalMI.Branch)) === am) ? `
-<div class="kpi-row py-1.5">
-  <span class="text-sm">🌟 <b>Most Improved Store (Network)</b></span>
-  <span class="text-sm text-right font-black text-emerald-600">🏅</span>
-</div>` : ''}
-
                 <div class="kpi-row py-1.5"><span class="text-sm">📈 <b>Sales Growth</b></span><span class="text-sm text-right font-medium"><b>${bestSales.Branch}</b> <span class="text-emerald-600 font-bold">(${bestSales.Sales>0?'+':''}${(bestSales.Sales*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🎯 <b>Product Target</b></span><span class="text-sm text-right font-medium"><b>${bestProduct.Branch}</b> <span class="text-emerald-600 font-bold">(${bestProduct.Product>0?'+':''}${(bestProduct.Product*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🗑️ <b>Best Wastage</b></span><span class="text-sm text-right font-medium"><b>${bestWaste.Branch}</b> <span class="text-blue-600 font-bold">(${(bestWaste.Waste*100).toFixed(1)}%)</span></span></div>
