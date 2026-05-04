@@ -1775,7 +1775,7 @@ async function renderDashboard(){
       if (am === bestProductAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Product</span>`;
       if (am === bestWasteAM) badges += `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Waste</span>`;
       if (am === bestLabourAM) badges += `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Labour</span>`;
-      if (am === bestAuditAM) badges += `<span class="bg-teal-50 text-teal-700 border border-teal-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Audit</span>`;
+ if (am === bestEnergyAM) badges += `<span class="bg-slate-50 text-slate-700 border border-slate-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Energy</span>`;
  if (am === bestATVAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
 
       const cardId = `area-card-${am.replace(/\s+/g, '-')}`;
@@ -1813,7 +1813,7 @@ async function renderDashboard(){
                 <div class="kpi-row py-1.5"><span class="text-sm">🗑️ <b>Best Wastage</b></span><span class="text-sm text-right font-medium"><b>${bestWaste.Branch}</b> <span class="text-blue-600 font-bold">(${(bestWaste.Waste*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">💷 <b>Lowest Labour %</b></span><span class="text-sm text-right font-medium"><b>${bestLabour.Branch}</b> <span class="text-indigo-600 font-bold">(${(bestLabour.Labour*100).toFixed(1)}%)</span></span></div>
  <div class="kpi-row py-1.5"><span class="text-sm">💰 <b>Best ATV</b></span><span class="text-sm text-right font-medium"><b>${bestATV.Branch}</b> <span class="text-emerald-600 font-bold">(£${(bestATV.ATV).toFixed(2)})</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">📋 <b>Top Audit</b></span><span class="text-sm text-right font-medium"><b>${bestAudit.Branch}</b> <span class="text-emerald-600 font-bold">(${(auditMap.get(bestAudit.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%)</span></span></div>
+                <div class="kpi-row py-1.5"><span class="text-sm">🔌 <b>Best Energy</b></span><span class="text-sm text-right font-medium"><b>${bestEnergy.Branch}</b> <span class="text-emerald-600 font-bold">(${(bestEnergy.Energy).toFixed(0)} kWh)</span></span></div>
               </div>
             </div>
 
@@ -1915,6 +1915,7 @@ async function renderDashboard(){
           ${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}
           ${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}
           ${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}
+ ${buildSubPodium('Energy Usage', 'eAvg', true, 0, 'whole')}
  </div>
       </div>`;
   }
@@ -1970,7 +1971,7 @@ async function renderDashboard(){
           <th class="p-3">Area</th>
           <th class="p-3">Sales</th>
           <th class="p-3">Labour</th>
-          <th class="p-3">Audit</th>
+          <th class="p-3">Energy</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
