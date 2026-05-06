@@ -28,45 +28,58 @@
   
   <script>
     async function exportVisibleViewAsZip(){
-      let cards = document.querySelectorAll('#mainView .card, .area-card-export');
-      if(currentView === 'halloffame') {
-        const y = document.getElementById('ytd-card');
-        if(y) cards = [y];
-      }
-      if(!cards.length){ alert('Nothing to export on this view'); return; }
+  // Export the CURRENT view as PNG(s) inside a ZIP.
+  // Overview/Winners/YTD export as a single full-screen PNG.
+  let cards = [];
 
-      const zip = new JSZip();
-      let idx = 1;
+  if(currentView === 'overview') {
+    const o = document.getElementById('overview-card');
+    if(o) cards = [o];
+  } else if(currentView === 'winners') {
+    const w = document.getElementById('winners-card');
+    if(w) cards = [w];
+  } else if(currentView === 'halloffame') {
+    const y = document.getElementById('ytd-card');
+    if(y) cards = [y];
+  } else if(currentView === 'areas') {
+    cards = Array.from(document.querySelectorAll('.area-card-export'));
+  } else {
+    const mv = document.getElementById('mainView');
+    if(mv) cards = [mv];
+  }
 
-      for(const card of cards){
-        const btn = card.querySelector('.export-btn');
-        if(btn) btn.style.display = 'none';
+  if(!cards.length){ alert('Nothing to export on this view'); return; }
 
-        // Force landscape mode for the duration of the export
-        card.classList.add('export-force-landscape');
+  const zip = new JSZip();
+  let idx = 1;
 
-        const canvas = await html2canvas(card, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false,
-          width: 1400 // Standard horizontal screen width for clean PNGs
-        });
+  for(const card of cards){
+    const btn = card.querySelector('.export-btn');
+    if(btn) btn.style.display = 'none';
 
-        const img = canvas.toDataURL('image/png').split(',')[1];
-        zip.file(`Card_${idx}.png`, img, { base64: true });
-        idx++;
+    card.classList.add('export-force-landscape');
+    const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
 
-        if(btn) btn.style.display = 'flex';
-        card.classList.remove('export-force-landscape');
-      }
+    const img = canvas.toDataURL('image/png').split(',')[1];
+    const baseName = (currentView === 'overview') ? 'Overview'
+                  : (currentView === 'winners') ? 'Winners'
+                  : (currentView === 'halloffame') ? 'YTD_Awards'
+                  : `Card_${idx}`;
 
-      const blob = await zip.generateAsync({ type: 'blob' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Birds_${currentView}_${currentTimeFilter}.zip`;
-      a.click();
-    }
+    zip.file(`${baseName}.png`, img, { base64: true });
+
+    idx++;
+
+    if(btn) btn.style.display = 'flex';
+    card.classList.remove('export-force-landscape');
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Birds_${currentView}_${currentTimeFilter}.zip`;
+  a.click();
+}
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1187,28 +1200,87 @@ function ringSVG(pct, stroke='#00A88E'){
   </div>`;
 }
 
-function exportCard(cardId, name) {
-    const el = document.getElementById(cardId);
-    if(!el) return;
-    const btn = el.querySelector('.export-btn');
-    if(btn) btn.style.display = 'none';
-
-    // Force horizontal format for export capture
-    el.classList.add('export-force-landscape');
-    
-    html2canvas(el, { 
-        scale: 2, 
-        backgroundColor: '#ffffff', 
-        useCORS: true,
-        width: 1400 // Capture width for landscape orientation
-    }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `Birds_Report_${name.replace(/\s+/g, '_')}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        if(btn) btn.style.display = 'flex';
-        el.classList.remove('export-force-landscape');
+// Render helper that captures full scrollable content (tables, overflow containers, etc.)
+async function renderElementToCanvas(el, {forceWidth=null} = {}){
+  const target = el;
+  
+  // 1. Temporarily expand scrollable areas to measure the TRUE height
+  const expandEls = target.querySelectorAll('.overflow-y-auto, [class*="max-h-"]');
+  const originalStyles = [];
+  
+  expandEls.forEach(n => {
+    // Save original styles
+    originalStyles.push({ 
+      el: n, 
+      overflow: n.style.overflow, 
+      maxHeight: n.style.maxHeight, 
+      height: n.style.height 
     });
+    // Force expansion
+    n.style.overflow = 'visible';
+    n.style.maxHeight = 'none';
+    n.style.height = 'auto';
+  });
+
+  // Wait one frame to ensure layout (fonts/charts) and expansions stabilise
+  await new Promise(r => requestAnimationFrame(() => r()));
+
+  // 2. Measure the new, unrestricted dimensions
+  const rect = target.getBoundingClientRect();
+  const cssWidth = forceWidth ? forceWidth : Math.ceil(Math.max(target.scrollWidth, rect.width));
+  const cssHeight = Math.ceil(Math.max(target.scrollHeight, rect.height));
+
+  // 3. Generate the canvas
+  const canvas = await html2canvas(target, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    logging: false,
+    width: cssWidth,
+    height: cssHeight,
+    windowWidth: cssWidth,
+    windowHeight: cssHeight,
+    scrollX: -window.scrollX,
+    scrollY: -window.scrollY,
+    onclone: (doc) => {
+      try {
+        const cloneEl = target.id ? doc.getElementById(target.id) : null;
+        if(!cloneEl) return;
+
+        // Force export layout
+        cloneEl.classList.add('export-force-landscape');
+        if(forceWidth) cloneEl.style.width = forceWidth + 'px';
+      } catch(e) {}
+    }
+  });
+
+  // 4. Restore original restricted views seamlessly
+  originalStyles.forEach(item => {
+    item.el.style.overflow = item.overflow;
+    item.el.style.maxHeight = item.maxHeight;
+    item.el.style.height = item.height;
+  });
+
+  return canvas;
+}
+
+function exportCard(cardId, name) {
+  const el = document.getElementById(cardId);
+  if(!el) return;
+  const btn = el.querySelector('.export-btn');
+  if(btn) btn.style.display = 'none';
+
+  el.classList.add('export-force-landscape');
+
+  renderElementToCanvas(el, { forceWidth: 1400 }).then(canvas => {
+    const link = document.createElement('a');
+    link.download = `Birds_Report_${name.replace(/\s+/g, '_')}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    if(btn) btn.style.display = 'flex';
+    el.classList.remove('export-force-landscape');
+  });
 }
 
 async function exportAllCardsToZip() {
@@ -1940,7 +2012,8 @@ try{
     </div>`;
 
     document.getElementById('mainView').innerHTML = `
-      <div id="winners-card" class="pb-2">
+      <div id="winners-card" class="pb-2 relative">
+  <div onclick="exportCard('winners-card', 'Winners')" class="export-btn absolute top-4 right-4 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
         ${improvedStoreHtml}
         <div class="card p-8 mb-6 text-center relative">
           <h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2>
