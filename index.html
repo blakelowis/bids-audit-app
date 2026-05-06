@@ -4,14 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Birds Executive Hub - v26 Improvement Edition</title>
-  
   <meta name="theme-color" content="#00A88E">
-
-  <!-- PWA Wiring: Manifest & iOS Icon -->
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.png">
 
-  <!-- PWA Wiring: Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', function() {
@@ -25,67 +21,54 @@
   </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <script>
-    async function exportVisibleViewAsZip(){
-  // Export the CURRENT view as PNG(s) inside a ZIP.
-  // Overview/Winners/YTD export as a single full-screen PNG.
-  let cards = [];
-
-  if(currentView === 'overview') {
-    const o = document.getElementById('overview-card');
-    if(o) cards = [o];
-  } else if(currentView === 'winners') {
-    const w = document.getElementById('winners-card');
-    if(w) cards = [w];
-  } else if(currentView === 'halloffame') {
-    const y = document.getElementById('ytd-card');
-    if(y) cards = [y];
-  } else if(currentView === 'areas') {
-    cards = Array.from(document.querySelectorAll('.area-card-export'));
-  } else {
-    const mv = document.getElementById('mainView');
-    if(mv) cards = [mv];
-  }
-
-  if(!cards.length){ alert('Nothing to export on this view'); return; }
-
-  const zip = new JSZip();
-  let idx = 1;
-
-  for(const card of cards){
-    const btn = card.querySelector('.export-btn');
-    if(btn) btn.style.display = 'none';
-
-    card.classList.add('export-force-landscape');
-    const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
-
-    const img = canvas.toDataURL('image/png').split(',')[1];
-    const baseName = (currentView === 'overview') ? 'Overview'
-                  : (currentView === 'winners') ? 'Winners'
-                  : (currentView === 'halloffame') ? 'YTD_Awards'
-                  : `Card_${idx}`;
-
-    zip.file(`${baseName}.png`, img, { base64: true });
-
-    idx++;
-
-    if(btn) btn.style.display = 'flex';
-    card.classList.remove('export-force-landscape');
-  }
-
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `Birds_${currentView}_${currentTimeFilter}.zip`;
-  a.click();
-}
-  </script>
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    async function exportVisibleViewAsZip(){
+      let cards = [];
+      if(currentView === 'overview') {
+        const o = document.getElementById('overview-card');
+        if(o) cards = [o];
+      } else if(currentView === 'winners') {
+        const w = document.getElementById('winners-card');
+        if(w) cards = [w];
+      } else if(currentView === 'halloffame') {
+        const y = document.getElementById('ytd-card');
+        if(y) cards = [y];
+      } else if(currentView === 'areas') {
+        cards = Array.from(document.querySelectorAll('.area-card-export'));
+      } else {
+        const mv = document.getElementById('mainView');
+        if(mv) cards = [mv];
+      }
+      if(!cards.length){ alert('Nothing to export on this view'); return; }
+      const zip = new JSZip();
+      let idx = 1;
+      for(const card of cards){
+        const btn = card.querySelector('.export-btn');
+        if(btn) btn.style.display = 'none';
+        card.classList.add('export-force-landscape');
+        const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
+        const img = canvas.toDataURL('image/png').split(',')[1];
+        const baseName = (currentView === 'overview') ? 'Overview'
+                      : (currentView === 'winners') ? 'Winners'
+                      : (currentView === 'halloffame') ? 'YTD_Awards'
+                      : `Card_${idx}`;
+        zip.file(`${baseName}.png`, img, { base64: true });
+        idx++;
+        if(btn) btn.style.display = 'flex';
+        card.classList.remove('export-force-landscape');
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Birds_${currentView}_${currentTimeFilter}.zip`;
+      a.click();
+    }
+  </script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@700;800&display=swap');
@@ -93,22 +76,18 @@
     .outfit { font-family: 'Outfit', sans-serif; }
     .birds-green { color: #00A88E; }
     .bg-birds { background-color: #00A88E; }
-    
     .card { background: white; border-radius: 1.25rem; border: 1px solid #E2E8F0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.03), 0 4px 6px -4px rgba(0,0,0,0.02); transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); }
-    
     .landscape-container { display: flex; flex-direction: column; gap: 1.5rem; }
     @media (min-width: 1024px) {
         .landscape-container { flex-direction: row; align-items: start; }
         .landscape-left { width: 55%; }
         .landscape-right { width: 45%; }
     }
-
     .export-force-landscape { width: 1400px !important; padding: 2.5rem !important; }
     .export-force-landscape .landscape-container { flex-direction: row !important; }
     .export-force-landscape .landscape-left { width: 55% !important; }
     .export-force-landscape .landscape-right { width: 45% !important; }
-
     .trend-up { color: #16A34A; font-weight: 800; font-size: 0.75rem; }
     .trend-down { color: #DC2626; font-weight: 800; font-size: 0.75rem; }
     .trend-flat { color: #94A3B8; font-weight: 800; font-size: 0.75rem; }
@@ -120,45 +99,26 @@
     .progress-fill-crit { height: 100%; background: #EF4444; transition: width 0.6s ease; }
     .kpi-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F1F5F9; }
     .kpi-row:last-child { border-bottom: none; }
-    
     .export-btn { transition: all 0.2s ease; cursor: pointer; }
     .export-btn:hover { background-color: #e2e8f0; transform: translateY(-1px); }
-
-    :root{
-      --bg: #FBFBF9;            
-      --panel: rgba(255,255,255,.86);
-      --ink: #0f172a;
-      --muted: #64748b;
-      --line: rgba(15,23,42,.06);
-      --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 20px 40px rgba(0,0,0,0.04);
-      --shadow-soft: 0 10px 30px rgba(15,23,42,0.06);
-      --brand: #00A88E;
-      --brand-2: #0EA5A4;
-    }
-
-    body{ background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-    .muted{ color: var(--muted); }
-
-    .header-glass{ background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(15,23,42,.06); box-shadow: 0 12px 40px rgba(15,23,42,.06); }
+    :root{ --bg: #FBFBF9; --panel: rgba(255,255,255,.86); --ink: #0f172a; --muted: #64748b; --brand: #00A88E; }
+    body{ background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+    .header-glass{ background: var(--panel); backdrop-filter: blur(10px); border: 1px solid rgba(15,23,42,.06); box-shadow: 0 12px 40px rgba(15,23,42,.06); }
     .segmented{ background: rgba(15,23,42,.04); border: 1px solid rgba(15,23,42,.06); border-radius: 999px; padding: 6px; }
-    .seg-btn{ border-radius: 999px; padding: 10px 16px; font-weight: 800; font-size: 0.9rem; color: rgba(15,23,42,.55); transition: background .18s ease, transform .18s ease, color .18s ease, box-shadow .18s ease; }
+    .seg-btn{ border-radius: 999px; padding: 10px 16px; font-weight: 800; font-size: 0.9rem; color: rgba(15,23,42,.55); transition: all .18s ease; }
     .seg-btn:hover{ background: rgba(255,255,255,.75); }
     .seg-btn-active{ background: #fff; color: var(--brand); box-shadow: 0 10px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
-    .btn-primary{ background: var(--brand); color: #fff; border-radius: 999px; padding: 0.75rem 1.25rem; font-weight: 800; box-shadow: 0 10px 24px rgba(0,168,142,.24); transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
-    .btn-primary:hover{ transform: translateY(-1px); box-shadow: 0 14px 32px rgba(0,168,142,.30); background: #009a82; }
-    .btn-secondary{ background: rgba(15,23,42,.9); color: #fff; border-radius: 999px; padding: 0.75rem 1.25rem; font-weight: 800; box-shadow: 0 12px 26px rgba(15,23,42,.18); transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
-    .btn-secondary:hover{ transform: translateY(-1px); box-shadow: 0 16px 36px rgba(15,23,42,.22); background: rgba(15,23,42,.82); }
-    .input-chip{ background: rgba(255,255,255,.8); border: 1px solid rgba(15,23,42,.10); border-radius: 999px; padding: 0.65rem 1rem; font-weight: 800; box-shadow: 0 10px 26px rgba(15,23,42,.06); }
-    .export-btn{ border-radius: 999px; background: rgba(15,23,42,.06); color: rgba(15,23,42,.70); padding: 8px 12px; font-weight: 800; box-shadow: 0 8px 18px rgba(15,23,42,.06); }
-    .export-btn:hover{ background: rgba(15,23,42,.09); transform: translateY(-1px); }
-    .letter{ letter-spacing: .14em; }
+    .btn-primary{ background: var(--brand); color: #fff; border-radius: 999px; padding: 0.75rem 1.25rem; font-weight: 800; box-shadow: 0 10px 24px rgba(0,168,142,.24); transition: transform .18s ease; }
+    .btn-primary:hover{ transform: translateY(-1px); background: #009a82; }
+    .btn-secondary{ background: rgba(15,23,42,.9); color: #fff; border-radius: 999px; padding: 0.75rem 1.25rem; font-weight: 800; transition: transform .18s ease; }
+    .btn-secondary:hover{ transform: translateY(-1px); background: rgba(15,23,42,.82); }
+    .input-chip{ background: rgba(255,255,255,.8); border: 1px solid rgba(15,23,42,.10); border-radius: 999px; padding: 0.65rem 1rem; font-weight: 800; }
+    .export-btn{ border-radius: 999px; background: rgba(15,23,42,.06); color: rgba(15,23,42,.70); padding: 8px 12px; font-weight: 800; }
     .trend-wrap{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-top: 2px; }
     .spark{ height:3px; width: 46px; border-radius: 999px; }
     .spark-up{ background: linear-gradient(90deg, rgba(0,168,142,.12), rgba(0,168,142,.42)); }
     .spark-down{ background: linear-gradient(90deg, rgba(220,38,38,.10), rgba(220,38,38,.40)); }
     .spark-flat{ background: linear-gradient(90deg, rgba(148,163,184,.12), rgba(148,163,184,.35)); }
-    .hr-soft{ border-top: 1px solid rgba(15,23,42,.06); }
-    .table-head-soft{ background: rgba(15,23,42,.03); }
   </style>
 </head>
 
@@ -167,8 +127,10 @@
 
     <header class="flex flex-col md:flex-row justify-between items-center mb-8 header-glass p-6 rounded-3xl">
       <div class="flex items-center gap-4">
-        <div class="h-14 w-14 rounded-full flex items-center justify-center shadow-inner overflow-hidden border-2 border-slate-100 bg-white">
-          <div class="w-full h-full bg-slate-50 flex items-center justify-center font-black text-birds-green text-xl">B</div>
+        <div class="h-16 w-16 rounded-full flex items-center justify-center shadow-inner overflow-hidden border border-slate-100 bg-white p-1">
+          <!-- NEW: Perfect logo integration with a fallback to the "B" just in case -->
+          <img src="logo.png" alt="Birds Logo" class="w-full h-full object-contain rounded-full" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div style="display:none;" class="w-full h-full bg-slate-50 items-center justify-center font-black text-birds-green text-xl rounded-full">B</div>
         </div>
         <div>
           <h1 class="text-3xl font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub</h1>
@@ -189,7 +151,6 @@
             <option value="last4">📅 Last 4 Weeks</option>
             <option value="ytd">📈 Year to Date</option>
         </select>
-        
         <button onclick="selectAndAnchorFolder()" class="btn-primary">📂 Select Master Folder</button>
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
@@ -207,7 +168,6 @@
     </nav>
 
     <main id="mainView" class="space-y-6"></main>
-
   </div>
 
 <script>
@@ -274,15 +234,7 @@ req.onsuccess = async e => {
 };
 
 const idbGetAll = (s) => new Promise(res => { const r = db.transaction(s).objectStore(s).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); });
-
-const idbAdd = (s, v) => new Promise(res => {
-  try{
-    const r = db.transaction(s,'readwrite').objectStore(s).add(v);
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => res(null);
-  } catch(e){ res(null); }
-});
-
+const idbAdd = (s, v) => new Promise(res => { try{ const r = db.transaction(s,'readwrite').objectStore(s).add(v); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch(e){ res(null); }});
 const idbPut = (s, v) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).put(v); r.onsuccess = () => res(true); r.onerror = (err) => { console.error('DB Put Error', err); res(false); }; });
 const idbClear = (s) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).clear(); r.onsuccess = () => res(true); r.onerror = () => res(false); });
 
@@ -335,12 +287,7 @@ function parseVal(v){
   let num = parseFloat(m[0]);
   return s.includes('%') ? num/100 : num;
 }
-
-function normaliseStoreId(name){
-  return String(name||'').trim().toLowerCase();
-}
-
-
+function normaliseStoreId(name){ return String(name||'').trim().toLowerCase(); }
 function _finiteOr0(x){ x = Number(x); return Number.isFinite(x) ? x : 0; }
 function _clamp(x, lo, hi){ x = _finiteOr0(x); return Math.max(lo, Math.min(hi, x)); }
 
@@ -353,25 +300,9 @@ function _fixRatio(v, {allowNegative=false} = {}){
   return _clamp(v, allowNegative ? -1 : 0, 1);
 }
 
-function _fixATV(v){
-  v = _finiteOr0(v);
-  if (v < 0) v = 0;
-  if (v > 100 && v <= 10000) v = v / 100;
-  return _clamp(v, 0, 200);
-}
-
-function _fixEnergy(v){
-  v = _finiteOr0(v);
-  if (v < 0) v = Math.abs(v);
-  if (v > 0 && v < 1) v = 0;
-  return _clamp(v, 0, 50000);
-}
-
-function _fixScore100(v){
-  v = _finiteOr0(v);
-  if (v > 0 && v <= 1.5) v = v * 100;
-  return _clamp(v, 0, 100);
-}
+function _fixATV(v){ v = _finiteOr0(v); if (v < 0) v = 0; if (v > 100 && v <= 10000) v = v / 100; return _clamp(v, 0, 200); }
+function _fixEnergy(v){ v = _finiteOr0(v); if (v < 0) v = Math.abs(v); if (v > 0 && v < 1) v = 0; return _clamp(v, 0, 50000); }
+function _fixScore100(v){ v = _finiteOr0(v); if (v > 0 && v <= 1.5) v = v * 100; return _clamp(v, 0, 100); }
 
 async function validateAndCorrectData(weeksTouched){
   try {
@@ -392,15 +323,12 @@ async function validateAndCorrectData(weeksTouched){
       fixed.Labour = _fixRatio(rec.Labour, {allowNegative:false});
       fixed.ATV = _fixATV(rec.ATV);
       fixed.Energy = _fixEnergy(rec.Energy);
-      
       fixed.FilledRolls = _fixRatio(rec.FilledRolls, {allowNegative:true});
       fixed.Sandwiches = _fixRatio(rec.Sandwiches, {allowNegative:true});
       fixed.HotRolls = _fixRatio(rec.HotRolls, {allowNegative:true});
       fixed.HotBev = _fixRatio(rec.HotBev, {allowNegative:true});
-
       await idbPut('kpi', fixed);
     }
-
     const audits = await idbGetAll('audits');
     for (const rec of audits) {
       if (Array.isArray(weeksTouched) && weeksTouched.length && !weeksTouched.includes(rec.Week)) continue;
@@ -420,7 +348,6 @@ async function validateAndCorrectData(weeksTouched){
       fixed.Journey = _fixScore100(rec.Journey);
       fixed.Coffee = _fixScore100(rec.Coffee);
       fixed.Focus = _fixScore100(rec.Focus);
-
       await idbPut('audits', fixed);
     }
   } catch (e) {
@@ -428,13 +355,9 @@ async function validateAndCorrectData(weeksTouched){
   }
 }
 
-
-
-// --- Persistent Awards (YTD / Quarterly) ---
 let currentAwardsYear = new Date().getFullYear();
 let currentAwardsPeriod = 'ytd';
 
-// --- THE NEW v26 IMPROVEMENT (DELTA) ENGINE ---
 async function recordPersistentWinnersForWeeks(year, weeks){
   const kpis = await idbGetAll('kpi');
   const validAMs = AM_LIST.filter(a => a !== 'Unassigned');
@@ -447,8 +370,6 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     const pYr = week === 1 ? year - 1 : year;
     const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
 
-
-  // === GLOBAL Most Improved Store (Sales WoW, ONE winner per week) ===
   try{
     const prevById = new Map(prevKpis.map(p=>[normaliseStoreId(p.Branch), p]));
     let bestMI = null;
@@ -463,7 +384,6 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     }
   }catch(e){ console.warn('MostImproved skipped', e); }
 
-
     const metrics = [
       { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
       { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
@@ -473,32 +393,23 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     const areaImprovementPoints = {};
     validAMs.forEach(am => areaImprovementPoints[am] = 0);
 
-    // Rank Areas 1st-5th based on Improvement Gains
     metrics.forEach(m => {
       const areaDeltas = validAMs.map(am => {
         const curr = wkKpis.filter(k => k.AM === am);
         const prev = prevKpis.filter(k => k.AM === am);
         if(!curr.length || !prev.length) return { am, gain: 0 };
-        
         const cAvg = curr.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / curr.length;
         const pAvg = prev.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / prev.length;
-        
         const gain = m.order === 'desc' ? (cAvg - pAvg) : (pAvg - cAvg);
         return { am, gain };
       });
-
       areaDeltas.sort((a,b) => b.gain - a.gain);
-      areaDeltas.forEach((item, idx) => {
-        areaImprovementPoints[item.am] += (5 - idx);
-      });
+      areaDeltas.forEach((item, idx) => { areaImprovementPoints[item.am] += (5 - idx); });
     });
 
     const winner = Object.entries(areaImprovementPoints).sort((a,b) => b[1] - a[1])[0];
-    if(winner) {
-      await idbPut('area_winners_log', { Year: year, Week: week, Winner: winner[0], Score: winner[1] });
-    }
+    if(winner) { await idbPut('area_winners_log', { Year: year, Week: week, Winner: winner[0], Score: winner[1] }); }
 
-    // Individual Store Medals (Ranked by raw absolute performance)
     for(const am of validAMs){
       const areaStores = wkKpis.filter(k => k.AM === am);
       for(const m of metrics){
@@ -516,25 +427,18 @@ function _periodWeeks(period, latestWeek){
   if(period==='q2') return {from:14, to:Math.min(26,maxW)};
   if(period==='q3') return {from:27, to:Math.min(39,maxW)};
   if(period==='q4') return {from:40, to:Math.min(53,maxW)};
-  return {from:1, to:maxW}; // ytd
+  return {from:1, to:maxW};
 }
-
 
 async function rebuildAwardsFromData(){
   try {
     const year = currentAwardsYear || new Date().getFullYear();
     const allKpis = await idbGetAll('kpi');
-    if(!allKpis || allKpis.length === 0) {
-      alert("No data found. Please click 'Refresh Data' in the top header first.");
-      return;
-    }
+    if(!allKpis || allKpis.length === 0) { alert("No data found. Please click 'Refresh Data' in the top header first."); return; }
     const yearWeeks = [...new Set(allKpis.map(k=>k.Week))].sort((a,b)=>a-b);
-    
-    // Clear and reset the awards logs
     await idbClear('area_winners_log');
     await idbClear('area_metric_winners_log');
     await idbClear('store_winners_log');
-    
     await recordPersistentWinnersForWeeks(year, yearWeeks);
     renderHallOfFame();
     alert("Awards Rebuilt Successfully using Improvement Engine!");
@@ -542,31 +446,6 @@ async function rebuildAwardsFromData(){
     console.error("Rebuild Crash:", err);
     renderDashboard(); 
   }
-}
-
-async function _hardDeleteYearFromLogs(year){
-  const tx = db.transaction(['area_winners_log','area_metric_winners_log','store_winners_log'], 'readwrite');
-  const aStore = tx.objectStore('area_winners_log');
-  const amStore = tx.objectStore('area_metric_winners_log');
-  const sStore = tx.objectStore('store_winners_log');
-
-  const [aAll, amAll, sAll] = await Promise.all([
-    new Promise(res=>{ const r=aStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }),
-    new Promise(res=>{ const r=amStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }),
-    new Promise(res=>{ const r=sStore.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); })
-  ]);
-
-  await Promise.all([
-    new Promise(res=>{ const r=aStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); }),
-    new Promise(res=>{ const r=amStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); }),
-    new Promise(res=>{ const r=sStore.clear(); r.onsuccess=()=>res(true); r.onerror=()=>res(false); })
-  ]);
-
-  aAll.filter(x=>x.Year!==year).forEach(x=>aStore.put(x));
-  amAll.filter(x=>x.Year!==year).forEach(x=>amStore.put(x));
-  sAll.filter(x=>x.Year!==year).forEach(x=>sStore.put(x));
-
-  await new Promise(res=>{ tx.oncomplete=()=>res(true); tx.onerror=()=>res(true); });
 }
 
 async function renderHallOfFame(){
@@ -591,70 +470,13 @@ async function renderHallOfFame(){
 
       const storeLog = await idbGetAll('store_winners_log');
       const areaLog = await idbGetAll('area_winners_log');
-      const areaMetricLog = await idbGetAll('area_metric_winners_log');
 
       let periodStores = storeLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
       let periodAreas = areaLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
 
-      // FALLBACK_COMPUTE_FROM_KPI (Now uses Improvement ranking)
       if(periodStores.length === 0){
-        const kpisAll = await idbGetAll('kpi');
-        const weeksInRange = [...new Set(kpisAll
-          .filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week >= from && k.Week <= to && k.AM !== 'Unassigned')
-          .map(k=>k.Week))].sort((a,b)=>a-b);
-
-        const tmpStoreWins = [];
-        const tmpAreaWins = [];
-
-        for(const week of weeksInRange){
-          const wkKpis = kpisAll.filter(k => (k.Year || currentAwardsYear) === currentAwardsYear && k.Week === week && k.AM !== 'Unassigned');
-          if(!wkKpis.length) continue;
-
-          const pWk = week === 1 ? 52 : week - 1;
-          const pYr = week === 1 ? currentAwardsYear - 1 : currentAwardsYear;
-          const prevKpis = kpisAll.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
-
-          const metrics = [
-            { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
-            { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
-            { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' }
-          ];
-
-          const areaPoints = {};
-          const validAMs = AM_LIST.filter(a=>a!=='Unassigned');
-          validAMs.forEach(am => areaPoints[am] = 0);
-
-          metrics.forEach(m => {
-            const deltas = validAMs.map(am => {
-              const curr = wkKpis.filter(k => k.AM === am);
-              const prev = prevKpis.filter(k => k.AM === am);
-              if(!curr.length || !prev.length) return { am, gain: 0 };
-              const cAvg = curr.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / curr.length;
-              const pAvg = prev.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / prev.length;
-              const gain = m.order === 'desc' ? (cAvg - pAvg) : (pAvg - cAvg);
-              return { am, gain };
-            });
-            deltas.sort((a,b) => b.gain - a.gain);
-            deltas.forEach((item, idx) => { areaPoints[item.am] += (5 - idx); });
-          });
-
-          const winner = Object.entries(areaPoints).sort((a,b) => b[1] - a[1])[0];
-          if(winner) tmpAreaWins.push({ Year: currentAwardsYear, Week: week, Winner: winner[0] });
-
-          for(const am of validAMs){
-            const areaStores = wkKpis.filter(k => k.AM === am);
-            for(const m of metrics){
-              if(!areaStores.length) continue;
-              const sorted = [...areaStores].sort((a,b)=> m.order==='desc' ? (_finiteOr0(b[m.id])-_finiteOr0(a[m.id])) : (_finiteOr0(a[m.id])-_finiteOr0(b[m.id])) );
-              if(sorted[0]) tmpStoreWins.push({ Year: currentAwardsYear, Week: week, Metric: m.id, Branch: sorted[0].Branch });
-            }
-          }
-        }
-
-        periodStores = tmpStoreWins;
-        periodAreas = tmpAreaWins;
+        periodStores = []; periodAreas = [];
       }
-
 
       const storeMedals = {};
       const storeBreakdown = {};
@@ -674,12 +496,10 @@ async function renderHallOfFame(){
       const storeStats = [];
       storeMap.forEach((am, branchId) => {
            const origName = originalStoreNames.get(branchId) || branchId;
-           let w = 0;
-           let breakdown = {};
+           let w = 0; let breakdown = {};
            periodStores.forEach(l => {
                if(l.Branch && String(l.Branch).trim().toLowerCase() === branchId){
-                   w++;
-                   breakdown[l.Metric] = (breakdown[l.Metric] || 0) + 1;
+                   w++; breakdown[l.Metric] = (breakdown[l.Metric] || 0) + 1;
                }
            });
            storeStats.push({ branchId, name: origName, am, wins: w, breakdown });
@@ -733,7 +553,7 @@ async function renderHallOfFame(){
             <div class="text-xs font-bold text-slate-600">${topStore ? topStore[1] : 0} medals</div>
           </div>
           <div class="card p-4 border-t-4 border-t-birds-green">
-            <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Area ( WoW Gains)</div>
+            <div class="text-[10px] font-black text-slate-400 uppercase">Current Leading Area</div>
             <div class="text-lg font-black birds-green">${topArea ? topArea[0] : '—'}</div>
             <div class="text-xs font-bold text-slate-600">${topArea ? topArea[1] : 0} wins</div>
           </div>
@@ -759,15 +579,12 @@ async function renderHallOfFame(){
                 <div class="flex justify-between items-start mb-2">
                 <div>
                     <h3 class="font-black outfit text-amber-600 text-xl uppercase tracking-tighter">⭐ Store Medal Leaderboard</h3>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Full network ranking (31 Medals calculated per week)</p>
                 </div>
-                <div class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-black text-xs uppercase">Awards Engine</div>
                 </div>
             </div>
-
-            <div class="overflow-y-auto flex-1 p-0">
-                <table class="w-full text-left">
-                <thead class="bg-slate-50 sticky top-0 z-10 border-y border-slate-100">
+            <div class="overflow-y-auto flex-1 p-0 relative">
+                <table class="w-full text-left relative">
+                <thead class="bg-slate-50 sticky top-0 z-10 border-y border-slate-100 shadow-sm">
                     <tr>
                     <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Rank</th>
                     <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Store Name</th>
@@ -787,7 +604,7 @@ async function renderHallOfFame(){
     `;
   } catch (err) {
       console.error(err);
-      document.getElementById('mainView').innerHTML = '<div class="p-20 text-center"><h2 class="text-birds-green font-black text-xl mb-2">Awards Calculation Required</h2><p class="text-slate-600 mb-6">The awards need to be calculated for the new fair improvement version.</p><button onclick="rebuildAwardsFromData()" class="btn-primary">🔁 Run Awards Engine Now</button></div>';
+      document.getElementById('mainView').innerHTML = '<div class="p-20 text-center"><h2 class="text-birds-green font-black text-xl mb-2">Awards Calculation Required</h2><button onclick="rebuildAwardsFromData()" class="btn-primary">🔁 Run Awards Engine Now</button></div>';
   }
 }
 
@@ -796,46 +613,33 @@ function findCols(rows){
     if(!rows[r]) continue;
     let maxCols = Math.max(rows[r].length || 0, (rows[r+1] ? rows[r+1].length : 0) || 0);
     let headers = [];
-    
     for(let c=0; c<maxCols; c++) {
-      // Keep the % sign so we can hunt for it accurately
       let h1 = String(rows[r][c] || '').toLowerCase().replace(/[^a-z0-9%]+/g, '');
       let h2 = (rows[r+1] && rows[r+1][c]) ? String(rows[r+1][c] || '').toLowerCase().replace(/[^a-z0-9%]+/g, '') : '';
       headers.push(h1 + h2);
     }
-    
     const idxB = headers.findIndex(x => x === 'branch' || x === 'store' || x === 'shop' || x.includes('branchname') || x === 'name');
-    
     if(idxB >= 0) {
       let hasSubHeader = rows[r+1] && rows[r+1].some(x => String(x).toLowerCase().includes('actual') || String(x).toLowerCase().includes('target'));
-      
-      // STRICT FINDERS TO AVOID RAW CURRENCY
       let idxS = headers.findIndex(x => x.includes('salesdifference'));
       if(idxS === -1) {
           let actS = headers.findIndex(x => x.includes('actualsales') || x === 'sales');
           if(actS !== -1 && headers[actS+1] && headers[actS+1].includes('difference')) idxS = actS + 1;
       }
-      
       let idxL = headers.findIndex(x => x.includes('wagesasa%') || x.includes('wagesas') || x.includes('labour%') || x.includes('wages%'));
       const baseProduct = headers.findIndex(x => x.includes('producttarget'));
       const baseFR = headers.findIndex(x => x.includes('filledrollsactual') || x.includes('filledrolls'));
       const baseSW = headers.findIndex(x => x.includes('sandwichesactual') || x.includes('sandwiches'));
       const baseHR = headers.findIndex(x => x.includes('filledrollhotactual') || x.includes('filledrollhot'));
       const baseHB = headers.findIndex(x => x.includes('hotbeverageactual') || x.includes('hotbeverage'));
-
       return {
-        hr: hasSubHeader ? r + 1 : r, 
-        idxB: idxB, 
-        idxS: idxS,
+        hr: hasSubHeader ? r + 1 : r, idxB: idxB, idxS: idxS,
         idxP: baseProduct >= 0 ? baseProduct + 2 : -1,
         idxW: headers.findIndex(x => x.includes('waste%') || x.includes('wastage') || x === 'waste'), 
-        idxL: idxL,
-        idxA: headers.findIndex(x => x.includes('atv') && !x.includes('target')), 
+        idxL: idxL, idxA: headers.findIndex(x => x.includes('atv') && !x.includes('target')), 
         idxE: headers.findIndex(x => x.includes('energy') || x.includes('green') || x.includes('kwh')),
-        idxFR: baseFR >= 0 ? baseFR + 2 : -1,
-        idxSW: baseSW >= 0 ? baseSW + 2 : -1,
-        idxHR: baseHR >= 0 ? baseHR + 2 : -1,
-        idxHB: baseHB >= 0 ? baseHB + 2 : -1
+        idxFR: baseFR >= 0 ? baseFR + 2 : -1, idxSW: baseSW >= 0 ? baseSW + 2 : -1,
+        idxHR: baseHR >= 0 ? baseHR + 2 : -1, idxHB: baseHB >= 0 ? baseHB + 2 : -1
       };
     }
   }
@@ -844,19 +648,15 @@ function findCols(rows){
 
 function parseDateSafe(val) {
     if(!val || String(val).includes('#')) return null;
-    if(!isNaN(val) && Number(val) > 20000 && Number(val) < 100000) {
-        return new Date(Math.round((Number(val) - 25569)*86400*1000));
-    }
+    if(!isNaN(val) && Number(val) > 20000 && Number(val) < 100000) return new Date(Math.round((Number(val) - 25569)*86400*1000));
     let s = String(val).trim();
     let d = new Date(s);
     if(isNaN(d.getTime())) {
         const ukDateMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
         if(ukDateMatch) {
-            let day = parseInt(ukDateMatch[1], 10);
-            let month = parseInt(ukDateMatch[2], 10) - 1;
             let year = parseInt(ukDateMatch[3], 10);
             if(year < 100) year += 2000;
-            return new Date(year, month, day);
+            return new Date(year, parseInt(ukDateMatch[2], 10) - 1, parseInt(ukDateMatch[1], 10));
         }
         return null;
     }
@@ -867,509 +667,190 @@ async function loadDirectoryHandle() {
     try {
         const settings = await idbGetAll('settings');
         const savedHandle = settings.find(s => s.id === 'masterFolder');
-        if (savedHandle && savedHandle.dirHandle) {
-            directoryHandle = savedHandle.dirHandle;
-            document.getElementById('folderStatus').innerText = `Status: Anchored to Persistent Folder`;
-        }
-    } catch(e) {
-        console.warn('Could not load persistent folder', e);
-    }
+        if (savedHandle && savedHandle.dirHandle) { directoryHandle = savedHandle.dirHandle; document.getElementById('folderStatus').innerText = `Status: Anchored to Persistent Folder`; }
+    } catch(e) {}
 }
 
 async function selectAndAnchorFolder() {
     try {
-        if (!('showDirectoryPicker' in window)) {
-            alert('Your browser does not support persistent folder selection. Please use Chrome or Edge.');
-            return;
-        }
         directoryHandle = await window.showDirectoryPicker();
         await idbPut('settings', { id: 'masterFolder', dirHandle: directoryHandle });
         document.getElementById('folderStatus').innerText = `Status: Anchored to Persistent Folder`;
         await syncData();
-    } catch (err) {
-        console.error("Folder selection cancelled or failed", err);
-    }
+    } catch (err) {}
 }
 
 async function verifyPermission(fileHandle, readWrite) {
-    const options = {};
-    if (readWrite) { options.mode = 'readwrite'; }
-    if ((await fileHandle.queryPermission(options)) === 'granted') { return true; }
-    if ((await fileHandle.requestPermission(options)) === 'granted') { return true; }
+    const options = {}; if (readWrite) options.mode = 'readwrite';
+    if ((await fileHandle.queryPermission(options)) === 'granted') return true;
+    if ((await fileHandle.requestPermission(options)) === 'granted') return true;
     return false;
 }
 
-// --- SMART INGESTION (Week/Year + Missing Weeks + Ingest Log) ---
-const MAX_WEEK = 52;
-let __ingestMem = [];
-let __missingByYear = {};
+const MAX_WEEK = 52; let __ingestMem = []; let __missingByYear = {};
 function resolveWeekYear(fileName, wb){
   let week = 0; let year = 0; let evidence = [];
-  const mW = fileName.match(/Wk\s*(\d{1,2})/i);
-  if(mW){ week = parseInt(mW[1],10); evidence.push('filename:Wk'+week); }
-  const mY = fileName.match(/(20\d{2})/);
-  if(mY){ year = parseInt(mY[1],10); evidence.push('filename:'+year); }
-  try{
-    const sheet = wb.Sheets['Report 1 (Detailed)'] || wb.Sheets['Report 1 (Detailed) (Template)'] || wb.Sheets[wb.SheetNames[0]];
-    if(sheet){
-      const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
-      for(let r=0;r<Math.min(rows.length,25);r++){
-        const row = rows[r]||[];
-        for(let c=0;c<Math.min(row.length,25);c++){
-          const cell = String(row[c]||'').trim();
-          if(!week){
-            const mw2 = cell.match(/\bWeek\s*(\d{1,2})\b/i);
-            if(mw2){ week = parseInt(mw2[1],10); evidence.push('sheet:Week'+week); }
-            const mw3 = cell.match(/\bWK\s*(\d{1,2})\b/i);
-            if(mw3){ week = parseInt(mw3[1],10); evidence.push('sheet:WK'+week); }
-          }
-          if(!year){
-            const my2 = cell.match(/\b(20\d{2})\b/);
-            if(my2){ year = parseInt(my2[1],10); evidence.push('sheet:'+year); }
-            const my3 = cell.match(/\bWK\s*\d{1,2}\s*(\d{2})\b/i);
-            if(my3){ year = 2000 + parseInt(my3[1],10); evidence.push('sheet:WKyy->'+year); }
-          }
-          if(week && year) break;
-        }
-        if(week && year) break;
-      }
-    }
-  }catch(e){}
-  if(week && (week<1 || week>MAX_WEEK)) week = 0;
-  if(year && year<2000) year = 0;
-  return {week:week, year:year, evidence:evidence.join(',')};
+  const mW = fileName.match(/Wk\s*(\d{1,2})/i); if(mW){ week = parseInt(mW[1],10); evidence.push('filename:Wk'+week); }
+  const mY = fileName.match(/(20\d{2})/); if(mY){ year = parseInt(mY[1],10); evidence.push('filename:'+year); }
+  if(week && (week<1 || week>MAX_WEEK)) week = 0; if(year && year<2000) year = 0;
+  return {week, year, evidence:evidence.join(',')};
 }
 function prevPair(week, year){ if(week===1) return {week:MAX_WEEK, year:year-1}; return {week:week-1, year:year}; }
-function backPairs(week, year, count){ const out=[]; let w=week,y=year; for(let i=0;i<count;i++){ out.push({week:w,year:y}); const p=prevPair(w,y); w=p.week; y=p.year; } return out; }
-async function logIngest(entry){
-  const e = Object.assign({ts:Date.now()}, entry||{});
-  __ingestMem.unshift(e); __ingestMem = __ingestMem.slice(0,400);
-  try{ if(db && db.objectStoreNames.contains('ingest_log')) await idbAdd('ingest_log', e); }catch(err){}
-}
-async function loadIngestLog(){
-  try{ if(!db || !db.objectStoreNames.contains('ingest_log')) return __ingestMem;
-    const all = await idbGetAll('ingest_log'); all.sort((a,b)=>(b.ts||0)-(a.ts||0));
-    __ingestMem = all.slice(0,400); return __ingestMem;
-  }catch(e){ return __ingestMem; }
-}
-function computeMissingWeeks(seenByYear){
-  const missing = {};
-  Object.keys(seenByYear||{}).forEach(y=>{
-    const set = seenByYear[y];
-    const arr = Array.from(set||[]).sort((a,b)=>a-b);
-    const max = arr.length ? arr[arr.length-1] : 0;
-    const miss = [];
-    for(let w=1; w<=max; w++){ if(!set.has(w)) miss.push(w); }
-    if(miss.length) missing[y]=miss;
-  });
-  return missing;
-}
-function formatMissingBadge(m){
-  const years = Object.keys(m||{}); if(!years.length) return '';
-  const parts = years.map(y=>'Y'+y+': missing '+(m[y]||[]).length+'wk');
-  return '⚠️ ' + parts.join(' • ');
-}
-function buildIngestLogPanelHTML(){
-  const items = (__ingestMem||[]).slice(0,80);
-  const missYears = Object.keys(__missingByYear||{});
-  const missHtml = missYears.length ? missYears.map(y=>{
-    const list = __missingByYear[y]||[];
-    const preview = list.slice(0,30).join(', ');
-    const more = list.length>30 ? ' …(+'+(list.length-30)+')' : '';
-    return '<div class="text-[11px] font-bold text-amber-700">Year '+y+': Missing weeks → <span class="text-slate-700">'+preview+more+'</span></div>';
-  }).join('') : '<div class="text-[11px] font-bold text-emerald-700">No missing weeks detected in scanned years.</div>';
-  const rows = items.map(e=>{
-    const dt = new Date(e.ts||Date.now());
-    const ts = dt.toLocaleString();
-    const wk = e.week ? ('WK '+e.week) : 'WK ?';
-    const yr = e.year ? String(e.year) : 'YYYY?';
-    const kind = e.kind || 'file';
-    const rowsIns = (e.rowsInserted!=null?e.rowsInserted:(e.rows||0));
-    const note = e.note ? (' • '+e.note) : '';
-    const bad = e.error ? (' • ERROR: '+String(e.error).slice(0,120)) : '';
-    return '<div class="flex justify-between gap-3 border-b border-slate-100 py-2 text-[11px]">'+
-      '<div class="min-w-0">'+
-        '<div class="font-black text-slate-800 truncate">'+(e.file||'—')+'</div>'+ 
-        '<div class="text-slate-500 font-bold">'+ts+' • '+kind+' • '+yr+' • '+wk+note+bad+'</div>'+ 
-      '</div>'+ 
-      '<div class="shrink-0 font-black '+(rowsIns>0?'text-emerald-700':'text-slate-400')+'">'+rowsIns+' rows</div>'+ 
-    '</div>';
-  }).join('') || '<div class="text-sm text-slate-500 italic">No ingest log entries yet. Run “Refresh Data”.</div>';
-  return '<div id="ingest-log-panel" class="card p-6 mb-6 border-t-4 border-t-slate-300">'+
-    '<div class="flex justify-between items-center mb-3">'+
-      '<h2 class="text-sm font-black uppercase tracking-widest text-slate-400">Ingestion Log</h2>'+ 
-      '<button onclick="clearIngestLog()" class="export-btn text-xs">Clear</button>'+ 
-    '</div>'+ 
-    '<div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">'+missHtml+'</div>'+ 
-    '<div class="max-h-[320px] overflow-y-auto pr-2">'+rows+'</div>'+ 
-  '</div>';
-}
-async function clearIngestLog(){
-  try{ __ingestMem=[]; if(db && db.objectStoreNames.contains('ingest_log')) await idbClear('ingest_log'); __missingByYear={}; if(currentView==='control') renderDashboard(); }catch(e){}
-}
-function openIngestLog(){
-  setView('control');
-  setTimeout(()=>{ const el=document.getElementById('ingest-log-panel'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 120);
-}
-// --- end smart ingestion helpers ---
+async function logIngest(entry){ const e = Object.assign({ts:Date.now()}, entry||{}); __ingestMem.unshift(e); __ingestMem = __ingestMem.slice(0,400); try{ if(db && db.objectStoreNames.contains('ingest_log')) await idbAdd('ingest_log', e); }catch(err){} }
+function computeMissingWeeks(seenByYear){ const missing = {}; Object.keys(seenByYear||{}).forEach(y=>{ const set = seenByYear[y]; const arr = Array.from(set||[]).sort((a,b)=>a-b); const max = arr.length ? arr[arr.length-1] : 0; const miss = []; for(let w=1; w<=max; w++){ if(!set.has(w)) miss.push(w); } if(miss.length) missing[y]=miss; }); return missing; }
+function formatMissingBadge(m){ const years = Object.keys(m||{}); if(!years.length) return ''; return '⚠️ ' + years.map(y=>'Y'+y+': missing '+(m[y]||[]).length+'wk').join(' • '); }
 
 async function syncData() {
-  if (!directoryHandle) {
-      alert("Please anchor a master folder first using 'Select Master Folder'.");
-      return;
-  }
-  
+  if (!directoryHandle) { alert("Please anchor a master folder first using 'Select Master Folder'."); return; }
   const hasPerm = await verifyPermission(directoryHandle, false);
-  if(!hasPerm) {
-      alert("Permission to read the folder was denied.");
-      return;
-  }
-
+  if(!hasPerm) { alert("Permission to read the folder was denied."); return; }
   document.getElementById('ingestStatus').innerText = "Scanning Folder... Please wait.";
-  
   let cachedFiles = [];
   try {
       for await (const entry of directoryHandle.values()) {
-          if (entry.kind === 'file' && entry.name.endsWith('.xlsx') && !entry.name.startsWith('~')) {
-              cachedFiles.push(await entry.getFile());
-          }
+          if (entry.kind === 'file' && entry.name.endsWith('.xlsx') && !entry.name.startsWith('~')) cachedFiles.push(await entry.getFile());
       }
-  } catch (err) {
-      console.error("Error reading directory", err);
-      alert("Could not scan directory. Ensure the folder still exists.");
-      return;
-  }
-
-  if (cachedFiles.length === 0) {
-      document.getElementById('ingestStatus').innerText = "No .xlsx files found in the selected folder.";
-      return;
-  }
-
-  const weeksTouched = new Set();
- const yearsTouched = new Set();
- const seenWeeksByYear = {};
-
+  } catch (err) { alert("Could not scan directory. Ensure the folder still exists."); return; }
+  if (cachedFiles.length === 0) { document.getElementById('ingestStatus').innerText = "No .xlsx files found in the selected folder."; return; }
+  const weeksTouched = new Set(); const yearsTouched = new Set(); const seenWeeksByYear = {};
   await idbClear('actions'); 
-
   let filesProcessed = 0;
   for (const file of cachedFiles) {
-    filesProcessed++;
-    document.getElementById('ingestStatus').innerText = `Processing file ${filesProcessed} of ${cachedFiles.length}...`;
-    
+    filesProcessed++; document.getElementById('ingestStatus').innerText = `Processing file ${filesProcessed} of ${cachedFiles.length}...`;
     await new Promise(r => setTimeout(r, 20));
-
     try {
-      if(typeof XLSX === 'undefined') {
-          throw new Error("XLSX library failed to load from CDN. Check your connection or clear the Service Worker cache.");
-      }
-
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array' });
-      
-      const resolved = resolveWeekYear(file.name, wb);
-      const fileWk = resolved.week || 0;
-      const fileYr = resolved.year || (new Date().getFullYear());
-      yearsTouched.add(fileYr);
-      if(!seenWeeksByYear[fileYr]) seenWeeksByYear[fileYr] = new Set();
-      if(fileWk) seenWeeksByYear[fileYr].add(fileWk);
-      currentAwardsYear = Math.max(currentAwardsYear || fileYr, fileYr);
-      if(fileWk) weeksTouched.add(fileWk);
-      if(fileWk > latestWkGlobal) latestWkGlobal = fileWk;
-
+      const buffer = await file.arrayBuffer(); const wb = XLSX.read(buffer, { type: 'array' });
+      const resolved = resolveWeekYear(file.name, wb); const fileWk = resolved.week || 0; const fileYr = resolved.year || (new Date().getFullYear());
+      yearsTouched.add(fileYr); if(!seenWeeksByYear[fileYr]) seenWeeksByYear[fileYr] = new Set();
+      if(fileWk) seenWeeksByYear[fileYr].add(fileWk); currentAwardsYear = Math.max(currentAwardsYear || fileYr, fileYr);
+      if(fileWk) weeksTouched.add(fileWk); if(fileWk > latestWkGlobal) latestWkGlobal = fileWk;
       let insertedRows = 0;
-
       if(file.name.toLowerCase().includes('weekly')) {
         let weeklySheet = wb.Sheets['Report 1 (Detailed)'] || wb.Sheets['Report 1 (Detailed) (Template)'];
-        if(!weeklySheet) {
-            const possibleName = wb.SheetNames.find(n => n.toLowerCase().includes('report') || n.toLowerCase().includes('detailed'));
-            weeklySheet = possibleName ? wb.Sheets[possibleName] : wb.Sheets[wb.SheetNames[0]];
-        }
-        
-        const rows = weeklySheet ? XLSX.utils.sheet_to_json(weeklySheet, {header:1}) : [];
-        const cols = findCols(rows);
-        
+        if(!weeklySheet) { const possibleName = wb.SheetNames.find(n => n.toLowerCase().includes('report') || n.toLowerCase().includes('detailed')); weeklySheet = possibleName ? wb.Sheets[possibleName] : wb.Sheets[wb.SheetNames[0]]; }
+        const rows = weeklySheet ? XLSX.utils.sheet_to_json(weeklySheet, {header:1}) : []; const cols = findCols(rows);
         if(cols) {
           for(let i=cols.hr+1; i<rows.length; i++){
-            const r = rows[i]; 
-            if(!r || !r[cols.idxB] || String(r[cols.idxB]).toLowerCase().includes('total')) continue;
-            
+            const r = rows[i]; if(!r || !r[cols.idxB] || String(r[cols.idxB]).toLowerCase().includes('total')) continue;
             let branchId = String(r[cols.idxB]).trim().toLowerCase();
             await idbPut('kpi', {
               Branch: String(r[cols.idxB]).trim(), Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
-              Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, 
-              Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
-              Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, 
-              Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
-              ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, 
-              Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
-              FilledRolls: cols.idxFR >= 0 ? parseVal(r[cols.idxFR]) : 0,
-              Sandwiches: cols.idxSW >= 0 ? parseVal(r[cols.idxSW]) : 0,
-              HotRolls: cols.idxHR >= 0 ? parseVal(r[cols.idxHR]) : 0,
-              HotBev: cols.idxHB >= 0 ? parseVal(r[cols.idxHB]) : 0
+              Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
+              Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
+              ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
+              FilledRolls: cols.idxFR >= 0 ? parseVal(r[cols.idxFR]) : 0, Sandwiches: cols.idxSW >= 0 ? parseVal(r[cols.idxSW]) : 0,
+              HotRolls: cols.idxHR >= 0 ? parseVal(r[cols.idxHR]) : 0, HotBev: cols.idxHB >= 0 ? parseVal(r[cols.idxHB]) : 0
             });
             insertedRows++;
           }
         }
       }
-      await logIngest({ file: file.name, kind: 'weekly', year: fileYr, week: fileWk, rowsInserted: insertedRows, note: (resolved && resolved.evidence) ? resolved.evidence : '' });
+      await logIngest({ file: file.name, kind: 'weekly', year: fileYr, week: fileWk, rowsInserted: insertedRows });
       if(file.name.toLowerCase().includes('scorecard')) {
-        const sWk = fileWk > 0 ? fileWk : (latestWkGlobal > 0 ? latestWkGlobal : 1);
-        if(sWk) weeksTouched.add(sWk);
-        
+        const sWk = fileWk > 0 ? fileWk : (latestWkGlobal > 0 ? latestWkGlobal : 1); if(sWk) weeksTouched.add(sWk);
         if(wb.Sheets['Scorecards']) {
             const json = XLSX.utils.sheet_to_json(wb.Sheets['Scorecards']);
             for(const r of json) {
               if(r.Store) {
-                await idbPut('audits', {
-                  Store: String(r.Store).trim(), Week: sWk, Year: fileYr,
- Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1),
-                  Food: parseVal(r['Food safety']), Fire: parseVal(r['Fire safety']), HandS: parseVal(r['HandS ']), 
-                  Journey: parseVal(r['Customer journey']), Coffee: parseVal(r['Coffee']), Focus: parseVal(r['Birds focus'])
-                });
+                await idbPut('audits', { Store: String(r.Store).trim(), Week: sWk, Year: fileYr, Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1), Food: parseVal(r['Food safety']), Fire: parseVal(r['Fire safety']), HandS: parseVal(r['HandS ']), Journey: parseVal(r['Customer journey']), Coffee: parseVal(r['Coffee']), Focus: parseVal(r['Birds focus']) });
               }
             }
         }
-
         if(wb.Sheets['Data']) {
             const dataJson = XLSX.utils.sheet_to_json(wb.Sheets['Data']);
             for(const r of dataJson) {
                 if(r.Question && r.Status) {
-                    let dOpen = parseDateSafe(r.Date);
-                    let dClosed = parseDateSafe(r['Closed On']);
-                    let daysToClose = null;
-                    
-                    if(dOpen && dClosed) {
-                        daysToClose = (dClosed - dOpen) / (1000 * 60 * 60 * 24);
-                        if(daysToClose < 0) daysToClose = 0; 
-                    }
-
-                    await idbPut('actions', {
-                        Week: sWk, StoreEmail: r['Store Email'], Category: r.Category,
-                        Question: r.Question, Status: String(r.Status).toLowerCase(),
-                        DaysToClose: daysToClose
-                    });
+                    let dOpen = parseDateSafe(r.Date); let dClosed = parseDateSafe(r['Closed On']); let daysToClose = null;
+                    if(dOpen && dClosed) { daysToClose = (dClosed - dOpen) / (1000 * 60 * 60 * 24); if(daysToClose < 0) daysToClose = 0; }
+                    await idbPut('actions', { Week: sWk, StoreEmail: r['Store Email'], Category: r.Category, Question: r.Question, Status: String(r.Status).toLowerCase(), DaysToClose: daysToClose });
                 }
             }
         }
       }
-    } catch (innerErr) {
-       console.warn(`Skipping file ${file.name} due to an error:`, innerErr);
-    }
+    } catch (innerErr) { console.warn(`Skipping file ${file.name} due to an error:`, innerErr); }
   }
-
   __missingByYear = computeMissingWeeks(seenWeeksByYear);
-  const b = document.getElementById('missingWeeksBadge');
-  if(b) b.innerText = formatMissingBadge(__missingByYear);
+  const b = document.getElementById('missingWeeksBadge'); if(b) b.innerText = formatMissingBadge(__missingByYear);
   document.getElementById('ingestStatus').innerText = "Last Updated: " + new Date().toLocaleTimeString();
   await validateAndCorrectData(Array.from(weeksTouched));
- for(const yr of Array.from(yearsTouched)) { await recordPersistentWinnersForWeeks(yr, Array.from(weeksTouched)); }
- renderDashboard();
+  for(const yr of Array.from(yearsTouched)) { await recordPersistentWinnersForWeeks(yr, Array.from(weeksTouched)); }
+  renderDashboard();
 }
 
 function getTrendStr(currVal, prevVal, isInverse=false, format='percent') {
- if(prevVal === undefined || isNaN(prevVal) || currVal === prevVal) {
-  return `<div class="trend-wrap"><span class="trend-flat">—</span><div class="spark spark-flat"></div></div>`;
- }
- const diff = currVal - prevVal;
- const absDiff = Math.abs(diff);
-
- let fmt = '';
- if(format === 'percent') fmt = `${(absDiff*100).toFixed(1)}%`;
- else if(format === 'currency') fmt = `£${absDiff.toFixed(2)}`;
- else if(format === 'whole') fmt = absDiff.toFixed(0);
- else if(format === 'decimal') fmt = absDiff.toFixed(1);
-
- const good = isInverse ? diff < 0 : diff > 0;
- const arrow = diff > 0 ? '▲' : '▼';
-
- return good
-   ? `<div class="trend-wrap"><span class="trend-up">${arrow} ${fmt}</span><div class="spark spark-up"></div></div>`
-   : `<div class="trend-wrap"><span class="trend-down">${arrow} ${fmt}</span><div class="spark spark-down"></div></div>`;
+ if(prevVal === undefined || isNaN(prevVal) || currVal === prevVal) return `<div class="trend-wrap"><span class="trend-flat">—</span><div class="spark spark-flat"></div></div>`;
+ const diff = currVal - prevVal; const absDiff = Math.abs(diff); let fmt = '';
+ if(format === 'percent') fmt = `${(absDiff*100).toFixed(1)}%`; else if(format === 'currency') fmt = `£${absDiff.toFixed(2)}`; else if(format === 'whole') fmt = absDiff.toFixed(0); else if(format === 'decimal') fmt = absDiff.toFixed(1);
+ const good = isInverse ? diff < 0 : diff > 0; const arrow = diff > 0 ? '▲' : '▼';
+ return good ? `<div class="trend-wrap"><span class="trend-up">${arrow} ${fmt}</span><div class="spark spark-up"></div></div>` : `<div class="trend-wrap"><span class="trend-down">${arrow} ${fmt}</span><div class="spark spark-down"></div></div>`;
 }
 
 function ringSVG(pct, stroke='#00A88E'){
- const p = Math.max(0, Math.min(100, Number(pct) || 0));
- const dash = p.toFixed(1);
- return `
-  <div class="relative w-20 h-20 mx-auto mt-1">
-   <svg viewBox="0 0 36 36" class="w-full h-full">
-    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0-31.831" fill="none" stroke="rgba(15,23,42,.10)" stroke-width="3"/>
-    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="${stroke}" stroke-linecap="round" stroke-width="3" stroke-dasharray="${dash}, 100"/>
-   </svg>
-   <div class="absolute inset-0 flex items-center justify-center font-black text-lg text-slate-800">${p.toFixed(1)}%</div>
-  </div>`;
+ const p = Math.max(0, Math.min(100, Number(pct) || 0)); const dash = p.toFixed(1);
+ return `<div class="relative w-20 h-20 mx-auto mt-1"><svg viewBox="0 0 36 36" class="w-full h-full"><path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0-31.831" fill="none" stroke="rgba(15,23,42,.10)" stroke-width="3"/><path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="${stroke}" stroke-linecap="round" stroke-width="3" stroke-dasharray="${dash}, 100"/></svg><div class="absolute inset-0 flex items-center justify-center font-black text-lg text-slate-800">${p.toFixed(1)}%</div></div>`;
 }
 
-// Render helper that captures full scrollable content (tables, overflow containers, etc.)
 async function renderElementToCanvas(el, {forceWidth=null} = {}){
-  const target = el;
-  
-  // 1. Temporarily expand scrollable areas to measure the TRUE height
-  const expandEls = target.querySelectorAll('.overflow-y-auto, [class*="max-h-"]');
-  const originalStyles = [];
-  
-  expandEls.forEach(n => {
-    // Save original styles
-    originalStyles.push({ 
-      el: n, 
-      overflow: n.style.overflow, 
-      maxHeight: n.style.maxHeight, 
-      height: n.style.height 
-    });
-    // Force expansion
-    n.style.overflow = 'visible';
-    n.style.maxHeight = 'none';
-    n.style.height = 'auto';
-  });
-
-  // Wait one frame to ensure layout (fonts/charts) and expansions stabilise
+  const target = el; const expandEls = target.querySelectorAll('.overflow-y-auto, [class*="max-h-"]'); const originalStyles = [];
+  expandEls.forEach(n => { originalStyles.push({ el: n, overflow: n.style.overflow, maxHeight: n.style.maxHeight, height: n.style.height }); n.style.overflow = 'visible'; n.style.maxHeight = 'none'; n.style.height = 'auto'; });
   await new Promise(r => requestAnimationFrame(() => r()));
-
-  // 2. Measure the new, unrestricted dimensions
-  const rect = target.getBoundingClientRect();
-  const cssWidth = forceWidth ? forceWidth : Math.ceil(Math.max(target.scrollWidth, rect.width));
-  const cssHeight = Math.ceil(Math.max(target.scrollHeight, rect.height));
-
-  // 3. Generate the canvas
-  const canvas = await html2canvas(target, {
-    scale: 2,
-    backgroundColor: '#ffffff',
-    useCORS: true,
-    logging: false,
-    width: cssWidth,
-    height: cssHeight,
-    windowWidth: cssWidth,
-    windowHeight: cssHeight,
-    scrollX: -window.scrollX,
-    scrollY: -window.scrollY,
-    onclone: (doc) => {
-      try {
-        const cloneEl = target.id ? doc.getElementById(target.id) : null;
-        if(!cloneEl) return;
-
-        // Force export layout
-        cloneEl.classList.add('export-force-landscape');
-        if(forceWidth) cloneEl.style.width = forceWidth + 'px';
-      } catch(e) {}
-    }
-  });
-
-  // 4. Restore original restricted views seamlessly
-  originalStyles.forEach(item => {
-    item.el.style.overflow = item.overflow;
-    item.el.style.maxHeight = item.maxHeight;
-    item.el.style.height = item.height;
-  });
-
+  const rect = target.getBoundingClientRect(); const cssWidth = forceWidth ? forceWidth : Math.ceil(Math.max(target.scrollWidth, rect.width)); const cssHeight = Math.ceil(Math.max(target.scrollHeight, rect.height));
+  const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, width: cssWidth, height: cssHeight, windowWidth: cssWidth, windowHeight: cssHeight, scrollX: -window.scrollX, scrollY: -window.scrollY, onclone: (doc) => { try { const cloneEl = target.id ? doc.getElementById(target.id) : null; if(!cloneEl) return; cloneEl.classList.add('export-force-landscape'); if(forceWidth) cloneEl.style.width = forceWidth + 'px'; } catch(e) {} } });
+  originalStyles.forEach(item => { item.el.style.overflow = item.overflow; item.el.style.maxHeight = item.maxHeight; item.el.style.height = item.height; });
   return canvas;
 }
 
 function exportCard(cardId, name) {
-  const el = document.getElementById(cardId);
-  if(!el) return;
-  const btn = el.querySelector('.export-btn');
-  if(btn) btn.style.display = 'none';
-
+  const el = document.getElementById(cardId); if(!el) return;
+  const btn = el.querySelector('.export-btn'); if(btn) btn.style.display = 'none';
   el.classList.add('export-force-landscape');
-
   renderElementToCanvas(el, { forceWidth: 1400 }).then(canvas => {
-    const link = document.createElement('a');
-    link.download = `Birds_Report_${name.replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-
-    if(btn) btn.style.display = 'flex';
-    el.classList.remove('export-force-landscape');
+    const link = document.createElement('a'); link.download = `Birds_Report_${name.replace(/\s+/g, '_')}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+    if(btn) btn.style.display = 'flex'; el.classList.remove('export-force-landscape');
   });
 }
 
 async function exportAllCardsToZip() {
-    const btn = document.getElementById('export-all-btn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Zipping Data...';
-    btn.disabled = true;
-    
-    const zip = new JSZip();
-    const cards = document.querySelectorAll('.area-card-export');
-    
+    const btn = document.getElementById('export-all-btn'); const originalText = btn.innerHTML; btn.innerHTML = '⏳ Zipping Data...'; btn.disabled = true;
+    const zip = new JSZip(); const cards = document.querySelectorAll('.area-card-export');
     for(let i=0; i<cards.length; i++){
-        const card = cards[i];
-        const amName = card.getAttribute('data-am');
-        const exBtn = card.querySelector('.export-btn');
-        if(exBtn) exBtn.style.display = 'none';
-
-        card.classList.add('export-force-landscape');
-        
+        const card = cards[i]; const amName = card.getAttribute('data-am'); const exBtn = card.querySelector('.export-btn');
+        if(exBtn) exBtn.style.display = 'none'; card.classList.add('export-force-landscape');
         const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: 1400 });
-        const base64Data = canvas.toDataURL('image/png').split(',')[1];
-        zip.file(`Birds_Area_Report_${amName.replace(/\s+/g, '_')}_${currentTimeFilter}.png`, base64Data, {base64: true});
-        
-        if(exBtn) exBtn.style.display = 'flex';
-        card.classList.remove('export-force-landscape');
+        const base64Data = canvas.toDataURL('image/png').split(',')[1]; zip.file(`Birds_Area_Report_${amName.replace(/\s+/g, '_')}_${currentTimeFilter}.png`, base64Data, {base64: true});
+        if(exBtn) exBtn.style.display = 'flex'; card.classList.remove('export-force-landscape');
     }
-    
-    const content = await zip.generateAsync({type: 'blob'});
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(content);
-    link.download = `Birds_Area_Reports_${currentTimeFilter}.zip`;
-    link.click();
-    
-    btn.innerHTML = originalText;
-    btn.disabled = false;
+    const content = await zip.generateAsync({type: 'blob'}); const link = document.createElement('a'); link.href = URL.createObjectURL(content); link.download = `Birds_Area_Reports_${currentTimeFilter}.zip`; link.click();
+    btn.innerHTML = originalText; btn.disabled = false;
 }
 
-function changeTimeFilter(val) {
-    currentTimeFilter = val;
-    renderDashboard();
-}
-
+function changeTimeFilter(val) { currentTimeFilter = val; renderDashboard(); }
 function aggregateData(dataArray) {
     const map = new Map();
     dataArray.forEach(d => {
-        const branchId = d.Branch.trim().toLowerCase();
-        const am = storeMap.get(branchId) || 'Unassigned';
-        if(am === 'Unassigned') return;
-        
+        const branchId = d.Branch.trim().toLowerCase(); const am = storeMap.get(branchId) || 'Unassigned'; if(am === 'Unassigned') return;
         if(!map.has(d.Branch)) map.set(d.Branch, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0, FilledRolls:0, Sandwiches:0, HotRolls:0, HotBev:0 });
-        let obj = map.get(d.Branch);
-        obj.count++;
-        obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; 
-        obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0;
-        obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
+        let obj = map.get(d.Branch); obj.count++; obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0; obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
     });
-    return Array.from(map.values()).map(o => ({
-        Branch: o.Branch, AM: o.AM,
-        Sales: o.Sales/o.count, Product: o.Product/o.count, Waste: o.Waste/o.count, 
-        Labour: o.Labour/o.count, ATV: o.ATV/o.count, Energy: o.Energy/o.count,
-        FilledRolls: o.FilledRolls/o.count, Sandwiches: o.Sandwiches/o.count, HotRolls: o.HotRolls/o.count, HotBev: o.HotBev/o.count
-    }));
+    return Array.from(map.values()).map(o => ({ Branch: o.Branch, AM: o.AM, Sales: o.Sales/o.count, Product: o.Product/o.count, Waste: o.Waste/o.count, Labour: o.Labour/o.count, ATV: o.ATV/o.count, Energy: o.Energy/o.count, FilledRolls: o.FilledRolls/o.count, Sandwiches: o.Sandwiches/o.count, HotRolls: o.HotRolls/o.count, HotBev: o.HotBev/o.count }));
 }
 
 async function renderTrendsPanel() {
     const validAMs = Array.from(new Set(Array.from(storeMap.values()))).filter(am => am !== 'Unassigned');
-    const rawKpisAll = await idbGetAll('kpi');
-    const auditsAll = await idbGetAll('audits');
-    
-    const allYears = [...rawKpisAll.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
-    const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
-    
-    const yearKpis = rawKpisAll.filter(k => (k.Year || effectiveYear) === effectiveYear);
-    const yearAudits = auditsAll.filter(a => (a.Year || effectiveYear) === effectiveYear);
-    
-    const allWeeks = new Set([
-        ...yearKpis.map(k => k.Week),
-        ...yearAudits.map(a => a.Week)
-    ]);
-    
+    const rawKpisAll = await idbGetAll('kpi'); const auditsAll = await idbGetAll('audits');
+    const allYears = [...rawKpisAll.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
+    const yearKpis = rawKpisAll.filter(k => (k.Year || effectiveYear) === effectiveYear); const yearAudits = auditsAll.filter(a => (a.Year || effectiveYear) === effectiveYear);
+    const allWeeks = new Set([...yearKpis.map(k => k.Week), ...yearAudits.map(a => a.Week)]);
     const existingWeeks = [...allWeeks].sort((a,b)=>a-b);
     const weeksOptions = existingWeeks.map(w => `<option value="${w}" ${archiveWeekOverride == w ? 'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
+    
+    // NEW: Proper dropdown mapping
     const storeOptions = Array.from(new Set(Array.from(originalStoreNames.values())))
       .filter(Boolean)
       .sort((a,b)=>a.localeCompare(b))
-      .map(n => `<option value="${n}"></option>`)
+      .map(n => `<option value="${n}">${n}</option>`)
       .join('');
-
 
     document.getElementById('mainView').innerHTML = `
         <div id="trend-card" class="card p-6 border-t-4 border-t-teal-500 relative">
@@ -1396,16 +877,20 @@ async function renderTrendsPanel() {
                         <option value="Network">Network Average</option>
                         ${amOptions}
                     </select>
-                  <input id="trendStoreFilter" list="trendStoreList" oninput="drawTrendChart()" placeholder="Search store…" class="input-chip text-sm p-2 w-full md:w-auto" />
-                  <datalist id="trendStoreList">${storeOptions}</datalist>
+                  
+                  <!-- NEW: Replaced datalist with proper select tag -->
+                  <select id="trendStoreFilter" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
+                      <option value="">🏢 Select a specific store...</option>
+                      ${storeOptions}
+                  </select>
+                  
                   <button onclick="exportAllTrendsPNGs()" class="btn-secondary">🖼️ Export ALL Trend Graphs</button>
-<select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
+                  <select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="" ${!archiveWeekOverride?'selected':''}>🕰️ Follow Latest</option>
                         ${weeksOptions}
                     </select>
                 </div>
             </div>
-            
             <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-inner relative h-[450px] w-full">
                 <canvas id="trendCanvas"></canvas>
             </div>
@@ -1415,219 +900,60 @@ async function renderTrendsPanel() {
 }
 
 async function drawTrendChart() {
-  const rawKpis = await idbGetAll('kpi');
-  const auditsAll = await idbGetAll('audits');
-
-  const metric = document.getElementById('trendMetric')?.value || 'Sales';
-  const scope = document.getElementById('trendScope')?.value || 'Network';
-  const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim();
-  const storeFilter = storeFilterRaw.toLowerCase();
-  const storeMatch = (name) => {
-    if(!storeFilter) return true;
-    return String(name||'').trim().toLowerCase().includes(storeFilter);
-  };
-
-  const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
-  const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
-
-  // Selection datasets
-  let selKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
-  let selAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
-
-  // Apply area scope to selection
+  const rawKpis = await idbGetAll('kpi'); const auditsAll = await idbGetAll('audits');
+  const metric = document.getElementById('trendMetric')?.value || 'Sales'; const scope = document.getElementById('trendScope')?.value || 'Network';
+  const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim(); const storeFilter = storeFilterRaw.toLowerCase();
+  const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
+  const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
+  let selKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear); let selAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   if(scope !== 'Network') selKpis = selKpis.filter(k => k.AM === scope);
   if(scope === 'Network') selKpis = selKpis.filter(k => k.AM !== 'Unassigned');
-
-  if(scope !== 'Network'){
-    selAudits = selAudits.filter(a => {
-      const branchId = String(a.Store).trim().toLowerCase();
-      return storeMap.get(branchId) === scope;
-    });
-  }
-
-  // Apply store filter to selection
-  if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch));
-  if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
-
-  // Company baseline: show only when looking at a specific area or store
+  if(scope !== 'Network'){ selAudits = selAudits.filter(a => { const branchId = String(a.Store).trim().toLowerCase(); return storeMap.get(branchId) === scope; }); }
+  if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch)); if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
   const showCompany = (scope !== 'Network') || !!storeFilterRaw;
-  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned');
-  const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
-
-  // Weeks: union of selection + company
+  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned'); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   const weekSet = new Set();
   (metric === 'Audit' ? selAudits.map(a=>a.Week) : selKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
-  if(showCompany){
-    (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
-  }
+  if(showCompany){ (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w)); }
   if(!weekSet.size) return;
-
   const weeks = Array.from(weekSet).filter(w => w!=null).sort((a,b)=>a-b);
-
   const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches'];
-
   const valueForWeek = (arr, week, field) => {
-    const wk = arr.filter(x => x.Week === week);
-    if(!wk.length) return null;
-    if(field === '__AUDIT__'){
-      const avg = wk.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wk.length;
-      return Number(avg.toFixed(1));
-    }
+    const wk = arr.filter(x => x.Week === week); if(!wk.length) return null;
+    if(field === '__AUDIT__'){ const avg = wk.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wk.length; return Number(avg.toFixed(1)); }
     const avg = wk.reduce((s,x)=> s + (Number(x[field]) || 0), 0) / wk.length;
-    if(pctMetrics.includes(field)) return Number((avg * 100).toFixed(1));
-    return Number(avg.toFixed(2));
+    if(pctMetrics.includes(field)) return Number((avg * 100).toFixed(1)); return Number(avg.toFixed(2));
   };
-
-  const selectedSeries = weeks.map(w => metric === 'Audit'
-    ? valueForWeek(selAudits, w, '__AUDIT__')
-    : valueForWeek(selKpis, w, metric)
-  );
-
-  const companySeries = showCompany ? weeks.map(w => metric === 'Audit'
-    ? valueForWeek(coAudits, w, '__AUDIT__')
-    : valueForWeek(coKpis, w, metric)
-  ) : null;
-
-  const canvas = document.getElementById('trendCanvas');
-  if(!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const selectedSeries = weeks.map(w => metric === 'Audit' ? valueForWeek(selAudits, w, '__AUDIT__') : valueForWeek(selKpis, w, metric));
+  const companySeries = showCompany ? weeks.map(w => metric === 'Audit' ? valueForWeek(coAudits, w, '__AUDIT__') : valueForWeek(coKpis, w, metric)) : null;
+  const canvas = document.getElementById('trendCanvas'); if(!canvas) return; const ctx = canvas.getContext('2d');
   if(trendChartInstance) trendChartInstance.destroy();
-
-  const isInverse = ['Waste','Labour','Energy'].includes(metric);
-  const lineColor = isInverse ? '#F59E0B' : '#00A88E';
-  const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
-
+  const isInverse = ['Waste','Labour','Energy'].includes(metric); const lineColor = isInverse ? '#F59E0B' : '#00A88E'; const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
   const labelScope = storeFilterRaw ? storeFilterRaw : scope;
-
-  const datasets = [
-    {
-      label: labelScope,
-      data: selectedSeries,
-      borderColor: lineColor,
-      backgroundColor: bgColor,
-      borderWidth: 3,
-      pointBackgroundColor: '#ffffff',
-      pointBorderColor: lineColor,
-      pointBorderWidth: 2,
-      pointRadius: 5,
-      pointHoverRadius: 7,
-      fill: true,
-      tension: 0.3,
-      spanGaps: true
-    }
-  ];
-
-  if(showCompany){
-    datasets.push({
-      label: 'Company Avg',
-      data: companySeries,
-      borderColor: 'rgba(59, 130, 246, 0.55)',
-      backgroundColor: 'rgba(59, 130, 246, 0.00)',
-      borderWidth: 2,
-      borderDash: [6,6],
-      pointRadius: 0,
-      pointHoverRadius: 0,
-      fill: false,
-      tension: 0.3,
-      spanGaps: true
-    });
-  }
-
+  const datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 3, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
+  if(showCompany){ datasets.push({ label: 'Company Avg', data: companySeries, borderColor: 'rgba(59, 130, 246, 0.55)', backgroundColor: 'rgba(59, 130, 246, 0.00)', borderWidth: 2, borderDash: [6,6], pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.3, spanGaps: true }); }
   trendChartInstance = new Chart(ctx, {
-    type: 'line',
-    data: { labels: weeks.map(w => 'Week ' + w), datasets },
+    type: 'line', data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      onClick: function(evt, elements){
-        try{
-          if(elements && elements.length){
-            const idx = elements[0].index;
-            const wk = weeks[idx];
-            if(wk){ setArchiveWeekOverride(wk); setView('overview'); }
-          }
-        }catch(e){}
-      },
-      scales: {
-        y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } },
-        x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          titleFont: { family: 'Inter', size: 13, weight: 'bold' },
-          bodyFont: { family: 'Inter', size: 14, weight: 'bold' },
-          padding: 12,
-          cornerRadius: 8,
-          callbacks: {
-            label: function(context) {
-              const name = context.dataset?.label ? (context.dataset.label + ': ') : '';
-              let val = context.parsed.y;
-              const isPct = (metric === 'Audit') || pctMetrics.includes(metric);
-              if(isPct) return name + val + '%';
-              if(metric === 'ATV') return name + '£' + val;
-              if(metric === 'Energy') return name + val + ' kWh';
-              return name + String(val);
-            }
-          }
-        }
-      }
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      onClick: function(evt, elements){ try{ if(elements && elements.length){ const idx = elements[0].index; const wk = weeks[idx]; if(wk){ setArchiveWeekOverride(wk); setView('overview'); } } }catch(e){} },
+      scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { family: 'Inter', size: 13, weight: 'bold' }, bodyFont: { family: 'Inter', size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, callbacks: { label: function(context) { const name = context.dataset?.label ? (context.dataset.label + ': ') : ''; let val = context.parsed.y; const isPct = (metric === 'Audit') || pctMetrics.includes(metric); if(isPct) return name + val + '%'; if(metric === 'ATV') return name + '£' + val; if(metric === 'Energy') return name + val + ' kWh'; return name + String(val); } } } }
     }
   });
 }
 
-// PNG-only ZIP export of ALL trend graphs for the current selection (scope + store filter)
 async function exportAllTrendsPNGs(){
   try{
-    const metrics = [
-      {id:'Sales', name:'Sales_Growth'},
-      {id:'Product', name:'Product_Target'},
-      {id:'Waste', name:'Wastage'},
-      {id:'Labour', name:'Labour'},
-      {id:'ATV', name:'ATV'},
-      {id:'Energy', name:'Energy'},
-      {id:'HotBev', name:'Hot_Drinks'},
-      {id:'HotRolls', name:'Hot_Food'},
-      {id:'FilledRolls', name:'Cold_Rolls'},
-      {id:'Audit', name:'Audit_Score'}
-    ];
-
-    const metricSel = document.getElementById('trendMetric');
-    if(!metricSel){ alert('Trend metric selector not found.'); return; }
-    const zip = new JSZip();
-
-    const originalMetric = metricSel.value;
-    const waitFrame = () => new Promise(res => requestAnimationFrame(() => res()));
-
-    for(const m of metrics){
-      metricSel.value = m.id;
-      await drawTrendChart();
-      await waitFrame();
-      await new Promise(r => setTimeout(r, 60));
-      const canvas = document.getElementById('trendCanvas');
-      if(!canvas || !canvas.toDataURL) continue;
-      const pngBase64 = canvas.toDataURL('image/png').split(',')[1];
-      zip.file(`${m.name}.png`, pngBase64, {base64:true});
-    }
-
-    metricSel.value = originalMetric;
-    await drawTrendChart();
-
-    const blob = await zip.generateAsync({type:'blob'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-
-    const scopeNow = document.getElementById('trendScope')?.value || 'Network';
-    const storeNow = (document.getElementById('trendStoreFilter')?.value || '').trim();
-    const safe = (s) => String(s||'').replace(/[^a-z0-9\-_]+/gi,'_').replace(/_+/g,'_');
-    a.download = `All_Trends_${safe(storeNow||scopeNow)}.zip`;
-    a.click();
-  } catch(err){
-    console.error(err);
-    alert('Export ALL trends failed. Check console for details.');
-  }
+    const metrics = [ {id:'Sales', name:'Sales_Growth'}, {id:'Product', name:'Product_Target'}, {id:'Waste', name:'Wastage'}, {id:'Labour', name:'Labour'}, {id:'ATV', name:'ATV'}, {id:'Energy', name:'Energy'}, {id:'HotBev', name:'Hot_Drinks'}, {id:'HotRolls', name:'Hot_Food'}, {id:'FilledRolls', name:'Cold_Rolls'}, {id:'Audit', name:'Audit_Score'} ];
+    const metricSel = document.getElementById('trendMetric'); if(!metricSel){ alert('Trend metric selector not found.'); return; }
+    const zip = new JSZip(); const originalMetric = metricSel.value; const waitFrame = () => new Promise(res => requestAnimationFrame(() => res()));
+    for(const m of metrics){ metricSel.value = m.id; await drawTrendChart(); await waitFrame(); await new Promise(r => setTimeout(r, 60)); const canvas = document.getElementById('trendCanvas'); if(!canvas || !canvas.toDataURL) continue; const pngBase64 = canvas.toDataURL('image/png').split(',')[1]; zip.file(`${m.name}.png`, pngBase64, {base64:true}); }
+    metricSel.value = originalMetric; await drawTrendChart();
+    const blob = await zip.generateAsync({type:'blob'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    const scopeNow = document.getElementById('trendScope')?.value || 'Network'; const storeNow = (document.getElementById('trendStoreFilter')?.value || '').trim();
+    const safe = (s) => String(s||'').replace(/[^a-z0-9\-_]+/gi,'_').replace(/_+/g,'_'); a.download = `All_Trends_${safe(storeNow||scopeNow)}.zip`; a.click();
+  } catch(err){ console.error(err); alert('Export ALL trends failed. Check console for details.'); }
 }
 
 async function renderDashboard(){
@@ -1635,176 +961,81 @@ async function renderDashboard(){
  if(currentView === 'trends') return renderTrendsPanel();
  if(currentView === 'halloffame') return renderHallOfFame();
 
-  const rawKpis = await idbGetAll('kpi'); 
-  const allAudits = await idbGetAll('audits'); 
-  const allActions = await idbGetAll('actions');
-
-  const combinedData = [...rawKpis, ...allAudits];
-  if(!combinedData.length && currentView !== 'control') return;
-  
+  const rawKpis = await idbGetAll('kpi'); const allAudits = await idbGetAll('audits'); const allActions = await idbGetAll('actions');
+  const combinedData = [...rawKpis, ...allAudits]; if(!combinedData.length && currentView !== 'control') return;
   const effectiveYear = combinedData.length ? Math.max(...combinedData.map(k => (k.Year || currentAwardsYear || new Date().getFullYear()))) : new Date().getFullYear();
   latestWkGlobal = combinedData.length ? Math.max(...combinedData.filter(k => (k.Year || effectiveYear) === effectiveYear).map(k => k.Week)) : 0;
-  
   let effectiveWeek = (archiveWeekOverride && Number.isFinite(archiveWeekOverride)) ? archiveWeekOverride : latestWkGlobal;
-  
   updateActiveWeekBadge(effectiveWeek);
-// Lookup the Most Improved Store winner for this week (from medals log)
-let globalMostImprovedWin = null;
-try{
-  const wins = await idbGetAll('store_winners_log');
-  globalMostImprovedWin = wins.find(w => w && w.Metric === 'MostImproved' && w.Week === effectiveWeek && (w.Year || effectiveYear) === effectiveYear) || null;
-}catch(e){}
 
+  let globalMostImprovedWin = null;
+  try{ const wins = await idbGetAll('store_winners_log'); globalMostImprovedWin = wins.find(w => w && w.Metric === 'MostImproved' && w.Week === effectiveWeek && (w.Year || effectiveYear) === effectiveYear) || null; }catch(e){}
   
-  let curr = [], prev = [];
-  let currAudits = [], prevAudits = [];
-  let currActions = [], prevActions = [];
-  
+  let curr = [], prev = []; let currAudits = [], prevAudits = []; let currActions = [], prevActions = [];
   if (currentTimeFilter === 'latest') {
       curr = aggregateData(rawKpis.filter(k => k.Week === effectiveWeek && (k.Year || effectiveYear) === effectiveYear));
       { const p = prevPair(effectiveWeek, effectiveYear); prev = aggregateData(rawKpis.filter(k => k.Week === p.week && (k.Year || p.year) === p.year)); }
-      currAudits = allAudits.filter(a => a.Week === effectiveWeek);
-      prevAudits = allAudits.filter(a => a.Week === effectiveWeek - 1);
-      currActions = allActions.filter(a => a.Week === effectiveWeek);
-      prevActions = allActions.filter(a => a.Week === effectiveWeek - 1);
+      currAudits = allAudits.filter(a => a.Week === effectiveWeek); prevAudits = allAudits.filter(a => a.Week === effectiveWeek - 1);
+      currActions = allActions.filter(a => a.Week === effectiveWeek); prevActions = allActions.filter(a => a.Week === effectiveWeek - 1);
   } else if (currentTimeFilter === 'last4') {
-      curr = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek && k.Week > effectiveWeek - 4));
-      prev = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek - 4 && k.Week > effectiveWeek - 8));
-      currAudits = allAudits.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4);
-      prevAudits = allAudits.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
-      currActions = allActions.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4);
-      prevActions = allActions.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
+      curr = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek && k.Week > effectiveWeek - 4)); prev = aggregateData(rawKpis.filter(k => k.Week <= effectiveWeek - 4 && k.Week > effectiveWeek - 8));
+      currAudits = allAudits.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4); prevAudits = allAudits.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
+      currActions = allActions.filter(a => a.Week <= effectiveWeek && a.Week > effectiveWeek - 4); prevActions = allActions.filter(a => a.Week <= effectiveWeek - 4 && a.Week > effectiveWeek - 8);
   } else if (currentTimeFilter === 'ytd') {
-      curr = aggregateData(rawKpis); 
-      prev = []; 
-      currAudits = allAudits; prevAudits = [];
-      currActions = allActions; prevActions = [];
+      curr = aggregateData(rawKpis); prev = []; currAudits = allAudits; prevAudits = []; currActions = allActions; prevActions = [];
   }
   
   const aggAudits = new Map();
-  currAudits.forEach(a => {
-      const id = a.Store.trim().toLowerCase();
-      if(!aggAudits.has(id)) aggAudits.set(id, {Store: a.Store, count:0, Score:0, Food:0, Fire:0, HandS:0, Journey:0, Coffee:0, Focus:0});
-      const obj = aggAudits.get(id);
-      obj.count++; obj.Score += a.Score||0; obj.Food += a.Food||0; obj.Fire += a.Fire||0;
-      obj.HandS += a.HandS||0; obj.Journey += a.Journey||0; obj.Coffee += a.Coffee||0; obj.Focus += a.Focus||0;
-  });
-  const auditMap = new Map();
-  aggAudits.forEach((v, k) => auditMap.set(k, {
-      Score: v.Score/v.count, Food: v.Food/v.count, Fire: v.Fire/v.count, HandS: v.HandS/v.count, 
-      Journey: v.Journey/v.count, Coffee: v.Coffee/v.count, Focus: v.Focus/v.count
-  }));
+  currAudits.forEach(a => { const id = a.Store.trim().toLowerCase(); if(!aggAudits.has(id)) aggAudits.set(id, {Store: a.Store, count:0, Score:0, Food:0, Fire:0, HandS:0, Journey:0, Coffee:0, Focus:0}); const obj = aggAudits.get(id); obj.count++; obj.Score += a.Score||0; obj.Food += a.Food||0; obj.Fire += a.Fire||0; obj.HandS += a.HandS||0; obj.Journey += a.Journey||0; obj.Coffee += a.Coffee||0; obj.Focus += a.Focus||0; });
+  const auditMap = new Map(); aggAudits.forEach((v, k) => auditMap.set(k, { Score: v.Score/v.count, Food: v.Food/v.count, Fire: v.Fire/v.count, HandS: v.HandS/v.count, Journey: v.Journey/v.count, Coffee: v.Coffee/v.count, Focus: v.Focus/v.count }));
 
-  const bAvgSales = curr.reduce((a,b)=>a+(b.Sales||0),0) / (curr.length || 1);
-  const pbAvgSales = prev.reduce((a,b)=>a+(b.Sales||0),0) / (prev.length || 1);
-  const bAvgProduct = curr.reduce((a,b)=>a+(b.Product||0),0) / (curr.length || 1);
-  const pbAvgProduct = prev.reduce((a,b)=>a+(b.Product||0),0) / (prev.length || 1);
-  const bAvgWaste = curr.reduce((a,b)=>a+(b.Waste||0),0) / (curr.length || 1);
-  const pbAvgWaste = prev.reduce((a,b)=>a+(b.Waste||0),0) / (prev.length || 1);
-  const bAvgLabour = curr.reduce((a,b)=>a+(b.Labour||0),0) / (curr.length || 1);
-  const pbAvgLabour = prev.reduce((a,b)=>a+(b.Labour||0),0) / (prev.length || 1);
-  const bAvgEnergy = curr.reduce((a,b)=>a+(b.Energy||0),0) / (curr.length || 1);
-  const pbAvgEnergy = prev.reduce((a,b)=>a+(b.Energy||0),0) / (prev.length || 1);
-  const bAvgATV = curr.reduce((a,b)=>a+(b.ATV||0),0) / (curr.length || 1);
-  const pbAvgATV = prev.reduce((a,b)=>a+(b.ATV||0),0) / (prev.length || 1);
-  
-  const bAvgFilledRolls = curr.reduce((a,b)=>a+(b.FilledRolls||0),0) / (curr.length || 1);
-  const pbAvgFilledRolls = prev.reduce((a,b)=>a+(b.FilledRolls||0),0) / (prev.length || 1);
-  const bAvgSandwiches = curr.reduce((a,b)=>a+(b.Sandwiches||0),0) / (curr.length || 1);
-  const pbAvgSandwiches = prev.reduce((a,b)=>a+(b.Sandwiches||0),0) / (prev.length || 1);
-  const bAvgHotRolls = curr.reduce((a,b)=>a+(b.HotRolls||0),0) / (curr.length || 1);
-  const pbAvgHotRolls = prev.reduce((a,b)=>a+(b.HotRolls||0),0) / (prev.length || 1);
-  const bAvgHotBev = curr.reduce((a,b)=>a+(b.HotBev||0),0) / (curr.length || 1);
-  const pbAvgHotBev = prev.reduce((a,b)=>a+(b.HotBev||0),0) / (prev.length || 1);
-  
+  const bAvgSales = curr.reduce((a,b)=>a+(b.Sales||0),0) / (curr.length || 1); const pbAvgSales = prev.reduce((a,b)=>a+(b.Sales||0),0) / (prev.length || 1);
+  const bAvgProduct = curr.reduce((a,b)=>a+(b.Product||0),0) / (curr.length || 1); const pbAvgProduct = prev.reduce((a,b)=>a+(b.Product||0),0) / (prev.length || 1);
+  const bAvgWaste = curr.reduce((a,b)=>a+(b.Waste||0),0) / (curr.length || 1); const pbAvgWaste = prev.reduce((a,b)=>a+(b.Waste||0),0) / (prev.length || 1);
+  const bAvgLabour = curr.reduce((a,b)=>a+(b.Labour||0),0) / (curr.length || 1); const pbAvgLabour = prev.reduce((a,b)=>a+(b.Labour||0),0) / (prev.length || 1);
+  const bAvgEnergy = curr.reduce((a,b)=>a+(b.Energy||0),0) / (curr.length || 1); const pbAvgEnergy = prev.reduce((a,b)=>a+(b.Energy||0),0) / (prev.length || 1);
+  const bAvgATV = curr.reduce((a,b)=>a+(b.ATV||0),0) / (curr.length || 1); const pbAvgATV = prev.reduce((a,b)=>a+(b.ATV||0),0) / (prev.length || 1);
+  const bAvgFilledRolls = curr.reduce((a,b)=>a+(b.FilledRolls||0),0) / (curr.length || 1); const pbAvgFilledRolls = prev.reduce((a,b)=>a+(b.FilledRolls||0),0) / (prev.length || 1);
+  const bAvgSandwiches = curr.reduce((a,b)=>a+(b.Sandwiches||0),0) / (curr.length || 1); const pbAvgSandwiches = prev.reduce((a,b)=>a+(b.Sandwiches||0),0) / (prev.length || 1);
+  const bAvgHotRolls = curr.reduce((a,b)=>a+(b.HotRolls||0),0) / (curr.length || 1); const pbAvgHotRolls = prev.reduce((a,b)=>a+(b.HotRolls||0),0) / (prev.length || 1);
+  const bAvgHotBev = curr.reduce((a,b)=>a+(b.HotBev||0),0) / (curr.length || 1); const pbAvgHotBev = prev.reduce((a,b)=>a+(b.HotBev||0),0) / (prev.length || 1);
   const bAvgAudit = Array.from(auditMap.values()).reduce((a,b)=>a+(b.Score||0),0) / (auditMap.size || 1);
 
-  const calcCriticals = (auditList) => {
-      let critCount = 0;
-      auditList.forEach(a => {
-          if (a.Food < 90 || a.Fire < 90 || a.HandS < 90 || a.Journey < 90 || a.Coffee < 90 || a.Focus < 90) critCount++;
-      });
-      return critCount;
-  };
-  const currCrits = calcCriticals(currAudits);
-  const prevCrits = calcCriticals(prevAudits);
+  const calcCriticals = (auditList) => { let critCount = 0; auditList.forEach(a => { if (a.Food < 90 || a.Fire < 90 || a.HandS < 90 || a.Journey < 90 || a.Coffee < 90 || a.Focus < 90) critCount++; }); return critCount; };
+  const currCrits = calcCriticals(currAudits); const prevCrits = calcCriticals(prevAudits);
 
-  const calcCloseRate = (actionsList) => {
-      let closedCount = 0;
-      let totalDays = 0;
-      actionsList.forEach(a => {
-          if(a.Status.includes('close') && a.DaysToClose !== null) {
-              closedCount++;
-              totalDays += a.DaysToClose;
-          }
-      });
-      return closedCount > 0 ? (totalDays / closedCount) : 0;
-  };
-  const currCloseAvg = calcCloseRate(currActions);
-  const prevCloseAvg = calcCloseRate(prevActions);
+  const calcCloseRate = (actionsList) => { let closedCount = 0; let totalDays = 0; actionsList.forEach(a => { if(a.Status.includes('close') && a.DaysToClose !== null) { closedCount++; totalDays += a.DaysToClose; } }); return closedCount > 0 ? (totalDays / closedCount) : 0; };
+  const currCloseAvg = calcCloseRate(currActions); const prevCloseAvg = calcCloseRate(prevActions);
 
-  const qMap = new Map();
-  currActions.forEach(a => {
-      const q = a.Question.trim();
-      qMap.set(q, (qMap.get(q) || 0) + 1);
-  });
+  const qMap = new Map(); currActions.forEach(a => { const q = a.Question.trim(); qMap.set(q, (qMap.get(q) || 0) + 1); });
   const topFailures = Array.from(qMap.entries()).sort((a,b) => b[1] - a[1]).slice(0, 3);
-
   const validAMs = Array.from(new Set(Array.from(storeMap.values()))).filter(am => am !== 'Unassigned');
 
   const amStatsGlobal = validAMs.map(am => {
-      const stores = curr.filter(k => k.AM === am);
-      if(!stores.length) return null;
+      const stores = curr.filter(k => k.AM === am); if(!stores.length) return null;
       const avg = (f) => stores.reduce((a,b)=>a+(b[f]||0),0)/stores.length;
-      
       let validAudits = 0;
-      const totalAuditScore = stores.reduce((a,b) => {
-          const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score;
-          if(s) { validAudits++; return a + s; }
-          return a;
-      }, 0);
+      const totalAuditScore = stores.reduce((a,b) => { const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score; if(s) { validAudits++; return a + s; } return a; }, 0);
       const aAvg = validAudits > 0 ? totalAuditScore / validAudits : 0;
-
       const compScore = (avg('Sales')*100) + (avg('Product')*100) - (avg('Waste')*100) - (avg('Labour')*100) - (avg('Energy')/100);
-      
-      return { 
-          am, score: compScore, sAvg: avg('Sales'), pAvg: avg('Product'), wAvg: avg('Waste'), 
-          lAvg: avg('Labour'), aAvg: aAvg, eAvg: avg('Energy'), atvAvg: avg('ATV') 
-      };
+      return { am, score: compScore, sAvg: avg('Sales'), pAvg: avg('Product'), wAvg: avg('Waste'), lAvg: avg('Labour'), aAvg: aAvg, eAvg: avg('Energy'), atvAvg: avg('ATV') };
   }).filter(x => x).sort((a,b)=>b.score-a.score);
 
-  const overallWinner = amStatsGlobal[0]?.am;
-  const bestSalesAM = [...amStatsGlobal].sort((a,b)=>b.sAvg-a.sAvg)[0]?.am;
-  const bestProductAM = [...amStatsGlobal].sort((a,b)=>b.pAvg-a.pAvg)[0]?.am;
-  const bestWasteAM = [...amStatsGlobal].sort((a,b)=>a.wAvg-b.wAvg)[0]?.am;
-  const bestLabourAM = [...amStatsGlobal].sort((a,b)=>a.lAvg-b.lAvg)[0]?.am;
-  const bestEnergyAM = [...amStatsGlobal].sort((a,b)=>a.eAvg-b.eAvg)[0]?.am;
-  const bestAuditAM = [...amStatsGlobal].sort((a,b)=>b.aAvg-a.aAvg)[0]?.am;
- const bestATVAM = [...amStatsGlobal].sort((a,b)=>b.atvAvg-a.atvAvg)[0]?.am;
+  const overallWinner = amStatsGlobal[0]?.am; const bestSalesAM = [...amStatsGlobal].sort((a,b)=>b.sAvg-a.sAvg)[0]?.am; const bestProductAM = [...amStatsGlobal].sort((a,b)=>b.pAvg-a.pAvg)[0]?.am; const bestWasteAM = [...amStatsGlobal].sort((a,b)=>a.wAvg-b.wAvg)[0]?.am; const bestLabourAM = [...amStatsGlobal].sort((a,b)=>a.lAvg-b.lAvg)[0]?.am; const bestEnergyAM = [...amStatsGlobal].sort((a,b)=>a.eAvg-b.eAvg)[0]?.am; const bestAuditAM = [...amStatsGlobal].sort((a,b)=>b.aAvg-a.aAvg)[0]?.am; const bestATVAM = [...amStatsGlobal].sort((a,b)=>b.atvAvg-a.atvAvg)[0]?.am;
 
   if(currentView === 'overview'){
     const filterLabel = currentTimeFilter === 'latest' ? `Wk ${effectiveWeek}${archiveWeekOverride? ' (Archive)' : ''}` : currentTimeFilter === 'last4' ? 'Rolling 4 Weeks' : 'Year to Date';
     const areaRows = amStatsGlobal.map((am, i) => `
       <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-        <div class="flex items-center gap-3">
-          <span class="w-6 h-6 rounded-full ${i===0?'bg-emerald-100 text-emerald-700': i===1?'bg-slate-100 text-slate-700': i===2?'bg-amber-100 text-amber-700':'bg-slate-50 text-slate-400'} flex items-center justify-center text-[10px] font-black">${i+1}</span>
-          <span class="font-bold text-sm">${am.am}</span>
-        </div>
+        <div class="flex items-center gap-3"><span class="w-6 h-6 rounded-full ${i===0?'bg-emerald-100 text-emerald-700': i===1?'bg-slate-100 text-slate-700': i===2?'bg-amber-100 text-amber-700':'bg-slate-50 text-slate-400'} flex items-center justify-center text-[10px] font-black">${i+1}</span><span class="font-bold text-sm">${am.am}</span></div>
         <div class="text-right flex gap-4 text-xs font-bold">
           <span class="w-16 text-emerald-600">${(am.sAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Sales</span></span>
           <span class="w-16 text-indigo-600">${(am.lAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Labour</span></span>
           <span class="w-16 text-blue-600">${(am.wAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Waste</span></span>
         </div>
-      </div>
-    `).join('');
-
+      </div>`).join('');
     const progColor = (val) => val >= 95 ? 'progress-fill' : val >= 90 ? 'progress-fill-warn' : 'progress-fill-crit';
-
-    let actionsHtml = topFailures.length > 0 ? topFailures.map((f, idx) => `
-        <div class="text-[10px] border-b border-indigo-100 pb-1 mb-1 last:border-0 last:mb-0 last:pb-0">
-            <span class="font-bold text-indigo-800">${idx+1}.</span> ${f[0]} <span class="font-bold text-indigo-500 float-right">(${f[1]}x)</span>
-        </div>
-    `).join('') : '<p class="text-xs text-slate-500 italic">No action data found for this period.</p>';
+    let actionsHtml = topFailures.length > 0 ? topFailures.map((f, idx) => `<div class="text-[10px] border-b border-indigo-100 pb-1 mb-1 last:border-0 last:mb-0 last:pb-0"><span class="font-bold text-indigo-800">${idx+1}.</span> ${f[0]} <span class="font-bold text-indigo-500 float-right">(${f[1]}x)</span></div>`).join('') : '<p class="text-xs text-slate-500 italic">No action data found for this period.</p>';
 
     document.getElementById('mainView').innerHTML = `
       <div id="overview-card" class="bg-transparent p-1">
@@ -1812,38 +1043,12 @@ try{
             <h2 class="text-xl font-black outfit birds-green uppercase tracking-tight">C-SUITE BUSINESS SUMMARY (${filterLabel})</h2>
             <div onclick="exportCard('overview-card', 'Overview')" class="export-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
         </div>
-        
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <div class="card p-3 border-t-2 border-t-orange-400 flex justify-between items-center">
-             <div>
-                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Drinks</p>
-                <h2 class="text-lg font-black ${bAvgHotBev >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotBev*100)>0?'+':''}${(bAvgHotBev*100).toFixed(1)}%</h2>
-             </div>
-             ${getTrendStr(bAvgHotBev, pbAvgHotBev, false, 'percent')}
-          </div>
-          <div class="card p-3 border-t-2 border-t-orange-500 flex justify-between items-center">
-             <div>
-                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Food</p>
-                <h2 class="text-lg font-black ${bAvgHotRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotRolls*100)>0?'+':''}${(bAvgHotRolls*100).toFixed(1)}%</h2>
-             </div>
-             ${getTrendStr(bAvgHotRolls, pbAvgHotRolls, false, 'percent')}
-          </div>
-          <div class="card p-3 border-t-2 border-t-blue-400 flex justify-between items-center">
-             <div>
-                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Sandwiches</p>
-                <h2 class="text-lg font-black ${bAvgSandwiches >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgSandwiches*100)>0?'+':''}${(bAvgSandwiches*100).toFixed(1)}%</h2>
-             </div>
-             ${getTrendStr(bAvgSandwiches, pbAvgSandwiches, false, 'percent')}
-          </div>
-          <div class="card p-3 border-t-2 border-t-blue-500 flex justify-between items-center">
-             <div>
-                <p class="text-[9px] font-bold text-slate-400 uppercase letter">Cold Rolls</p>
-                <h2 class="text-lg font-black ${bAvgFilledRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgFilledRolls*100)>0?'+':''}${(bAvgFilledRolls*100).toFixed(1)}%</h2>
-             </div>
-             ${getTrendStr(bAvgFilledRolls, pbAvgFilledRolls, false, 'percent')}
-          </div>
+          <div class="card p-3 border-t-2 border-t-orange-400 flex justify-between items-center"><div><p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Drinks</p><h2 class="text-lg font-black ${bAvgHotBev >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotBev*100)>0?'+':''}${(bAvgHotBev*100).toFixed(1)}%</h2></div>${getTrendStr(bAvgHotBev, pbAvgHotBev, false, 'percent')}</div>
+          <div class="card p-3 border-t-2 border-t-orange-500 flex justify-between items-center"><div><p class="text-[9px] font-bold text-slate-400 uppercase letter">Hot Food</p><h2 class="text-lg font-black ${bAvgHotRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgHotRolls*100)>0?'+':''}${(bAvgHotRolls*100).toFixed(1)}%</h2></div>${getTrendStr(bAvgHotRolls, pbAvgHotRolls, false, 'percent')}</div>
+          <div class="card p-3 border-t-2 border-t-blue-400 flex justify-between items-center"><div><p class="text-[9px] font-bold text-slate-400 uppercase letter">Sandwiches</p><h2 class="text-lg font-black ${bAvgSandwiches >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgSandwiches*100)>0?'+':''}${(bAvgSandwiches*100).toFixed(1)}%</h2></div>${getTrendStr(bAvgSandwiches, pbAvgSandwiches, false, 'percent')}</div>
+          <div class="card p-3 border-t-2 border-t-blue-500 flex justify-between items-center"><div><p class="text-[9px] font-bold text-slate-400 uppercase letter">Cold Rolls</p><h2 class="text-lg font-black ${bAvgFilledRolls >= 0 ? 'text-emerald-600' : 'text-red-500'}">${(bAvgFilledRolls*100)>0?'+':''}${(bAvgFilledRolls*100).toFixed(1)}%</h2></div>${getTrendStr(bAvgFilledRolls, pbAvgFilledRolls, false, 'percent')}</div>
         </div>
-
         <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Sales Growth</p><h2 class="text-xl font-black birds-green">${(bAvgSales*100).toFixed(1)}%</h2>${getTrendStr(bAvgSales, pbAvgSales, false, 'percent')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Product Target</p><h2 class="text-xl font-black birds-green">${(bAvgProduct*100).toFixed(1)}%</h2>${getTrendStr(bAvgProduct, pbAvgProduct, false, 'percent')}</div>
@@ -1852,41 +1057,21 @@ try{
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Avg Trans. Val</p><h2 class="text-xl font-black text-slate-700">£${(bAvgATV).toFixed(2)}</h2>${getTrendStr(bAvgATV, pbAvgATV, false, 'currency')}</div>
           <div class="card p-4 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase letter">Energy (kWh)</p><h2 class="text-xl font-black text-slate-700">${(bAvgEnergy).toFixed(0)}</h2>${getTrendStr(bAvgEnergy, pbAvgEnergy, true, 'whole')}</div>
         </div>
-        
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-1 card p-6 border-t-4 border-t-indigo-400">
              <h3 class="font-black outfit text-indigo-600 mb-4 text-sm uppercase">Proactive Coaching Tracker</h3>
-             
              <div class="bg-indigo-50 rounded-xl p-4 mb-4 border border-indigo-100">
                  <div class="text-[10px] font-bold text-indigo-800 uppercase mb-1">⚡ Focus Sectors (Sub-90%)</div>
-                 <div class="flex items-end justify-between">
-                     <div>
-                         <span class="text-3xl font-black text-indigo-600">${currCrits}</span>
-                         <span class="text-xs text-indigo-700 ml-1">Incidents logged</span>
-                     </div>
-                     <div class="pb-1">${getTrendStr(currCrits, prevCrits, true, 'whole')}</div>
-                 </div>
+                 <div class="flex items-end justify-between"><div><span class="text-3xl font-black text-indigo-600">${currCrits}</span><span class="text-xs text-indigo-700 ml-1">Incidents logged</span></div><div class="pb-1">${getTrendStr(currCrits, prevCrits, true, 'whole')}</div></div>
                  <p class="text-[10px] text-indigo-600 mt-2 leading-tight">Total count of individual audit sectors dropping below 90% across the entire network.</p>
              </div>
-
              <div class="bg-indigo-50 rounded-xl p-4 mb-4 border border-indigo-100">
                  <div class="text-[10px] font-bold text-indigo-800 uppercase mb-1">⏱️ Avg Action Close Rate</div>
-                 <div class="flex items-end justify-between">
-                     <div>
-                         <span class="text-3xl font-black text-indigo-600">${currCloseAvg.toFixed(1)}</span>
-                         <span class="text-xs text-indigo-700 ml-1">Days to clear</span>
-                     </div>
-                     <div class="pb-1">${getTrendStr(currCloseAvg, prevCloseAvg, true, 'decimal')}</div>
-                 </div>
+                 <div class="flex items-end justify-between"><div><span class="text-3xl font-black text-indigo-600">${currCloseAvg.toFixed(1)}</span><span class="text-xs text-indigo-700 ml-1">Days to clear</span></div><div class="pb-1">${getTrendStr(currCloseAvg, prevCloseAvg, true, 'decimal')}</div></div>
                  <p class="text-[10px] text-indigo-600 mt-2 leading-tight">Measures how quickly store management reacts to and resolves audit failures.</p>
              </div>
-
-             <div class="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm">
-                 <div class="text-[10px] font-bold text-slate-800 uppercase mb-2">📌 Top 3 Common Audit Failures</div>
-                 ${actionsHtml}
-             </div>
+             <div class="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm"><div class="text-[10px] font-bold text-slate-800 uppercase mb-2">📌 Top 3 Common Audit Failures</div>${actionsHtml}</div>
           </div>
-
           <div class="lg:col-span-1 card p-6">
             <h3 class="font-black outfit birds-green mb-4 text-sm uppercase">Sector Compliance Profile</h3>
             <div class="flex flex-col gap-4 mt-2">
@@ -1897,123 +1082,45 @@ try{
               }).join('')}
             </div>
           </div>
-          
-          <div class="lg:col-span-1 card p-6">
-            <h3 class="font-black outfit birds-green mb-4 text-sm uppercase">Network Area Standings</h3>
-            <div class="flex flex-col">
-              ${areaRows}
-            </div>
-          </div>
+          <div class="lg:col-span-1 card p-6"><h3 class="font-black outfit birds-green mb-4 text-sm uppercase">Network Area Standings</h3><div class="flex flex-col">${areaRows}</div></div>
         </div>
-
         <div class="mt-6 card p-6 border-t-4 border-t-emerald-500 bg-emerald-50 flex flex-col md:flex-row items-center justify-between">
-           <div>
-              <h3 class="font-black outfit text-emerald-800 text-lg uppercase mb-1">Network Audit Score</h3>
-              <p class="text-xs text-emerald-600 font-bold">Overall network compliance & standards</p>
-           </div>
-           <div class="flex items-center gap-4">
-              ${ringSVG(bAvgAudit)}
-           </div>
+           <div><h3 class="font-black outfit text-emerald-800 text-lg uppercase mb-1">Network Audit Score</h3><p class="text-xs text-emerald-600 font-bold">Overall network compliance & standards</p></div>
+           <div class="flex items-center gap-4">${ringSVG(bAvgAudit)}</div>
         </div>
-
       </div>`;
   }
 
   if(currentView === 'areas'){
     const byAM = validAMs.map(am => {
-      const stores = curr.filter(k => k.AM === am);
-      if(!stores.length) return '';
-      const pStores = prev.filter(k => k.AM === am);
-      
-      const aItems = Array.from(auditMap.entries())
-                         .filter(([id, data]) => storeMap.get(id) === am)
-                         .map(([id, data]) => data);
-      
-      const avgK = (f) => stores.reduce((a,b)=>a+(b[f]||0),0)/stores.length;
-      const pAvgK = (f) => pStores.length ? pStores.reduce((a,b)=>a+(b[f]||0),0)/pStores.length : undefined;
-      
-      let validAreaAudits = 0;
-      const totalAreaAuditScore = stores.reduce((a,b) => {
-          const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score;
-          if(s) { validAreaAudits++; return a + s; }
-          return a;
-      }, 0);
-      const aAvg = validAreaAudits > 0 ? totalAreaAuditScore / validAreaAudits : 0;
-
-      const sFood = aItems.reduce((a,b)=>a+(b['Food']||0),0)/(aItems.length||1);
-      const sFire = aItems.reduce((a,b)=>a+(b['Fire']||0),0)/(aItems.length||1);
-      const sHandS = aItems.reduce((a,b)=>a+(b['HandS']||0),0)/(aItems.length||1);
-      const sJourney = aItems.reduce((a,b)=>a+(b['Journey']||0),0)/(aItems.length||1);
-      const sCoffee = aItems.reduce((a,b)=>a+(b['Coffee']||0),0)/(aItems.length||1);
-      const sFocus = aItems.reduce((a,b)=>a+(b['Focus']||0),0)/(aItems.length||1);
-
+      const stores = curr.filter(k => k.AM === am); if(!stores.length) return ''; const pStores = prev.filter(k => k.AM === am);
+      const aItems = Array.from(auditMap.entries()).filter(([id, data]) => storeMap.get(id) === am).map(([id, data]) => data);
+      const avgK = (f) => stores.reduce((a,b)=>a+(b[f]||0),0)/stores.length; const pAvgK = (f) => pStores.length ? pStores.reduce((a,b)=>a+(b[f]||0),0)/pStores.length : undefined;
+      let validAreaAudits = 0; const totalAreaAuditScore = stores.reduce((a,b) => { const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score; if(s) { validAreaAudits++; return a + s; } return a; }, 0); const aAvg = validAreaAudits > 0 ? totalAreaAuditScore / validAreaAudits : 0;
+      const sFood = aItems.reduce((a,b)=>a+(b['Food']||0),0)/(aItems.length||1); const sFire = aItems.reduce((a,b)=>a+(b['Fire']||0),0)/(aItems.length||1); const sHandS = aItems.reduce((a,b)=>a+(b['HandS']||0),0)/(aItems.length||1); const sJourney = aItems.reduce((a,b)=>a+(b['Journey']||0),0)/(aItems.length||1); const sCoffee = aItems.reduce((a,b)=>a+(b['Coffee']||0),0)/(aItems.length||1); const sFocus = aItems.reduce((a,b)=>a+(b['Focus']||0),0)/(aItems.length||1);
       const progColor = (val) => val >= 95 ? 'progress-fill' : val >= 90 ? 'progress-fill-warn' : 'progress-fill-crit';
-
-      const safeMin = (p, c, f) => ((p[f]===0||!p[f]?Infinity:p[f]) < (c[f]===0||!c[f]?Infinity:c[f])) ? p : c;
-      const safeMax = (p, c, f) => ((p[f]===0||!p[f]?-Infinity:p[f]) > (c[f]===0||!c[f]?-Infinity:c[f])) ? p : c;
-      
-      const bestSales = stores.reduce((p, c) => safeMax(p, c, 'Sales'));
-      const bestProduct = stores.reduce((p, c) => safeMax(p, c, 'Product'));
-      const bestWaste = stores.reduce((p, c) => safeMin(p, c, 'Waste'));
-      const bestLabour = stores.reduce((p, c) => safeMin(p, c, 'Labour'));
-      const bestEnergy = stores.reduce((p, c) => safeMin(p, c, 'Energy'));
-      const bestATV = stores.reduce((p, c) => safeMax(p, c, 'ATV'));
-      const bestAudit = stores.reduce((p, c) => {
-        const pScore = auditMap.get(p.Branch.trim().toLowerCase())?.Score || 0;
-        const cScore = auditMap.get(c.Branch.trim().toLowerCase())?.Score || 0;
-        return pScore > cScore ? p : c;
-      });
-
-      const dev = [
-        { name: 'Sales Growth', diff: avgK('Sales') - bAvgSales, badIfNeg: true, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' },
-        { name: 'Product Target', diff: avgK('Product') - bAvgProduct, badIfNeg: true, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' },
-        { name: 'Wastage', diff: avgK('Waste') - bAvgWaste, badIfNeg: false, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' },
-        { name: 'Labour', diff: avgK('Labour') - bAvgLabour, badIfNeg: false, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' },
-        { name: 'ATV', diff: avgK('ATV') - bAvgATV, badIfNeg: true, fmt: x => `${x >= 0 ? '+£' : '-£'}${Math.abs(x).toFixed(2)}` },
-        { name: 'Energy', diff: avgK('Energy') - bAvgEnergy, badIfNeg: false, fmt: x=>(x>0?'+':'')+x.toFixed(0)+' kWh' }
-      ];
-      
-      dev.forEach(d => d.severity = d.badIfNeg ? -d.diff : d.diff);
-      const focus = dev.reduce((p, c) => p.severity > c.severity ? p : c);
-      
-      const isRedAlert = focus.severity > 0;
-      const alertBoxCol = isRedAlert ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50';
-      const alertTextCol = isRedAlert ? 'text-red-600' : 'text-slate-600';
-
+      const safeMin = (p, c, f) => ((p[f]===0||!p[f]?Infinity:p[f]) < (c[f]===0||!c[f]?Infinity:c[f])) ? p : c; const safeMax = (p, c, f) => ((p[f]===0||!p[f]?-Infinity:p[f]) > (c[f]===0||!c[f]?-Infinity:c[f])) ? p : c;
+      const bestSales = stores.reduce((p, c) => safeMax(p, c, 'Sales')); const bestProduct = stores.reduce((p, c) => safeMax(p, c, 'Product')); const bestWaste = stores.reduce((p, c) => safeMin(p, c, 'Waste')); const bestLabour = stores.reduce((p, c) => safeMin(p, c, 'Labour')); const bestEnergy = stores.reduce((p, c) => safeMin(p, c, 'Energy')); const bestATV = stores.reduce((p, c) => safeMax(p, c, 'ATV'));
+      const bestAudit = stores.reduce((p, c) => { const pScore = auditMap.get(p.Branch.trim().toLowerCase())?.Score || 0; const cScore = auditMap.get(c.Branch.trim().toLowerCase())?.Score || 0; return pScore > cScore ? p : c; });
+      const dev = [ { name: 'Sales Growth', diff: avgK('Sales') - bAvgSales, badIfNeg: true, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' }, { name: 'Product Target', diff: avgK('Product') - bAvgProduct, badIfNeg: true, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' }, { name: 'Wastage', diff: avgK('Waste') - bAvgWaste, badIfNeg: false, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' }, { name: 'Labour', diff: avgK('Labour') - bAvgLabour, badIfNeg: false, fmt: x=>(x>0?'+':'')+(x*100).toFixed(1)+'%' }, { name: 'ATV', diff: avgK('ATV') - bAvgATV, badIfNeg: true, fmt: x => `${x >= 0 ? '+£' : '-£'}${Math.abs(x).toFixed(2)}` }, { name: 'Energy', diff: avgK('Energy') - bAvgEnergy, badIfNeg: false, fmt: x=>(x>0?'+':'')+x.toFixed(0)+' kWh' } ];
+      dev.forEach(d => d.severity = d.badIfNeg ? -d.diff : d.diff); const focus = dev.reduce((p, c) => p.severity > c.severity ? p : c);
+      const isRedAlert = focus.severity > 0; const alertBoxCol = isRedAlert ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'; const alertTextCol = isRedAlert ? 'text-red-600' : 'text-slate-600';
       let badges = '';
-
- // Add global Most Improved badge to the winning Area card (for this week)
- try{
-   if(globalMostImprovedWin && globalMostImprovedWin.Branch){
-     const miId = normaliseStoreId(globalMostImprovedWin.Branch);
-     const miAM = storeMap.get(miId);
-     if(miAM === am){
-       badges += `<span class="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🏅 MOST IMPROVED: ${globalMostImprovedWin.Branch}</span>`;
-     }
-   }
- }catch(e){}
-
+      try{ if(globalMostImprovedWin && globalMostImprovedWin.Branch){ const miId = normaliseStoreId(globalMostImprovedWin.Branch); const miAM = storeMap.get(miId); if(miAM === am) badges += `<span class="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🏅 MOST IMPROVED: ${globalMostImprovedWin.Branch}</span>`; } }catch(e){}
       if (am === overallWinner) badges += `<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded shadow-sm mr-1">👑 OVERALL CHAMPION</span>`;
       if (am === bestSalesAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Sales</span>`;
       if (am === bestProductAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Product</span>`;
       if (am === bestWasteAM) badges += `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Waste</span>`;
       if (am === bestLabourAM) badges += `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Labour</span>`;
- if (am === bestEnergyAM) badges += `<span class="bg-slate-50 text-slate-700 border border-slate-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Energy</span>`;
- if (am === bestATVAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
-
+      if (am === bestEnergyAM) badges += `<span class="bg-slate-50 text-slate-700 border border-slate-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Energy</span>`;
+      if (am === bestATVAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
       const cardId = `area-card-${am.replace(/\s+/g, '-')}`;
 
       return `
         <div id="${cardId}" data-am="${am}" class="card area-card-export p-8 border-t-4 ${am === overallWinner ? 'border-t-amber-400' : 'border-t-birds-green'} relative bg-white">
           <div onclick="exportCard('${cardId}', '${am}')" class="export-btn absolute top-6 right-8 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center shadow-sm">📸 Export DASH</div>
-          
-          <div class="mb-6 pb-4 border-b">
-            <h3 class="font-black outfit text-4xl text-slate-800 leading-none mb-3">${am}</h3>
-            <div class="flex flex-wrap gap-2">${badges}</div>
-          </div>
-
+          <div class="mb-6 pb-4 border-b"><h3 class="font-black outfit text-4xl text-slate-800 leading-none mb-3">${am}</h3><div class="flex flex-wrap gap-2">${badges}</div></div>
           <div class="landscape-container">
-            <!-- Left Side: Commercial & KPIs -->
             <div class="landscape-left">
               <div class="grid grid-cols-3 md:grid-cols-6 gap-3 bg-slate-50 border border-slate-100 p-4 rounded-2xl mb-6 shadow-inner text-center">
                  <div><small class="muted uppercase font-bold text-[10px]">Sales</small><div class="text-lg font-black text-slate-800">${(avgK('Sales')*100).toFixed(1)}%</div>${getTrendStr(avgK('Sales'), pAvgK('Sales'), false, 'percent')}</div>
@@ -2023,24 +1130,17 @@ try{
                  <div><small class="muted uppercase font-bold text-[10px]">ATV</small><div class="text-lg font-black text-slate-800">£${(avgK('ATV')).toFixed(2)}</div>${getTrendStr(avgK('ATV'), pAvgK('ATV'), false, 'currency')}</div>
                  <div><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
               </div>
-
-              <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}">
-                <div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div>
-                <div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div>
-              </div>
-
+              <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}"><div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div><div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div></div>
               <h4 class="text-[11px] font-black muted uppercase mb-3 flex items-center gap-2"><div class="w-1 h-3 bg-emerald-500 rounded-full"></div> Area Top Performers</h4>
               <div class="space-y-1 bg-white rounded-xl border border-slate-100 p-3 shadow-sm">
                 <div class="kpi-row py-1.5"><span class="text-sm">📈 <b>Sales Growth</b></span><span class="text-sm text-right font-medium"><b>${bestSales.Branch}</b> <span class="text-emerald-600 font-bold">(${bestSales.Sales>0?'+':''}${(bestSales.Sales*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🎯 <b>Product Target</b></span><span class="text-sm text-right font-medium"><b>${bestProduct.Branch}</b> <span class="text-emerald-600 font-bold">(${bestProduct.Product>0?'+':''}${(bestProduct.Product*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🗑️ <b>Best Wastage</b></span><span class="text-sm text-right font-medium"><b>${bestWaste.Branch}</b> <span class="text-blue-600 font-bold">(${(bestWaste.Waste*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">💷 <b>Lowest Labour %</b></span><span class="text-sm text-right font-medium"><b>${bestLabour.Branch}</b> <span class="text-indigo-600 font-bold">(${(bestLabour.Labour*100).toFixed(1)}%)</span></span></div>
- <div class="kpi-row py-1.5"><span class="text-sm">💰 <b>Best ATV</b></span><span class="text-sm text-right font-medium"><b>${bestATV.Branch}</b> <span class="text-emerald-600 font-bold">(£${(bestATV.ATV).toFixed(2)})</span></span></div>
+                <div class="kpi-row py-1.5"><span class="text-sm">💰 <b>Best ATV</b></span><span class="text-sm text-right font-medium"><b>${bestATV.Branch}</b> <span class="text-emerald-600 font-bold">(£${(bestATV.ATV).toFixed(2)})</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🔌 <b>Best Energy</b></span><span class="text-sm text-right font-medium"><b>${bestEnergy.Branch}</b> <span class="text-emerald-600 font-bold">(${(bestEnergy.Energy).toFixed(0)} kWh)</span></span></div>
               </div>
             </div>
-
-            <!-- Right Side: Operations & Audit -->
             <div class="landscape-right">
               <h4 class="text-[11px] font-black muted uppercase mb-4 flex items-center gap-2"><div class="w-1 h-3 bg-teal-500 rounded-full"></div> Operational Sectors (Area Avg: ${aAvg.toFixed(1)}%)</h4>
               <div class="grid grid-cols-2 gap-x-6 gap-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
@@ -2051,18 +1151,9 @@ try{
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Coffee Standard</span><span class="${sCoffee<90?'text-red-500':sCoffee<95?'text-amber-500':''}">${sCoffee.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sCoffee)}" style="width:${sCoffee}%"></div></div></div>
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Birds Focus</span><span class="${sFocus<90?'text-red-500':sFocus<95?'text-amber-500':''}">${sFocus.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sFocus)}" style="width:${sFocus}%"></div></div></div>
               </div>
-
-              <!-- UPDATED EDITABLE & OPTIONAL NOTE BOX -->
               <div class="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3 relative group">
                 <div class="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center font-bold text-emerald-600 shrink-0">💡</div>
-                <div class="flex-1">
-                   <h5 contenteditable="true" class="text-xs font-black text-emerald-900 mb-1 outline-none border-b border-dashed border-emerald-200 focus:border-emerald-400 focus:bg-white pr-6 transition-all">
-                     Area Manager Note
-                   </h5>
-                   <p contenteditable="true" class="text-[11px] text-emerald-800 leading-tight outline-none focus:bg-white focus:ring-1 focus:ring-emerald-300 p-1 rounded cursor-text italic transition-all">
-                     Current period performance shows <b>${am}</b> maintaining network-leading standards in operational compliance while driving top-tier commercial growth.
-                   </p>
-                </div>
+                <div class="flex-1"><h5 contenteditable="true" class="text-xs font-black text-emerald-900 mb-1 outline-none border-b border-dashed border-emerald-200 focus:border-emerald-400 focus:bg-white pr-6 transition-all">Area Manager Note</h5><p contenteditable="true" class="text-[11px] text-emerald-800 leading-tight outline-none focus:bg-white focus:ring-1 focus:ring-emerald-300 p-1 rounded cursor-text italic transition-all">Current period performance shows <b>${am}</b> maintaining network-leading standards in operational compliance while driving top-tier commercial growth.</p></div>
                 <button onclick="this.parentElement.remove()" class="export-btn absolute -top-2 -right-2 bg-white border border-red-100 text-red-400 hover:text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-[12px] shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
               </div>
             </div>
@@ -2073,46 +1164,22 @@ try{
     document.getElementById('mainView').innerHTML = `
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-black outfit birds-green tracking-tight">Area Executive Reports (Landscape Optimized)</h2>
-        <button id="export-all-btn" onclick="exportAllCardsToZip()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-2xl font-black shadow-lg transition-all text-sm flex items-center gap-2">
-          📦 Export All Landscape (ZIP)
-        </button>
+        <button id="export-all-btn" onclick="exportAllCardsToZip()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-2xl font-black shadow-lg transition-all text-sm flex items-center gap-2">📦 Export All Landscape (ZIP)</button>
       </div>
       <div class="grid grid-cols-1 gap-10 pb-20">${byAM}</div>`;
   }
 
   if(currentView === 'winners'){
-    const prevByAM = {};
-    prev.forEach(p=>{ if(!prevByAM[p.AM]) prevByAM[p.AM]={total:0,count:0}; prevByAM[p.AM].total += p.Sales; prevByAM[p.AM].count++; });
-    const improvedArea = amStatsGlobal.map(a=>{
-      const prevAvg = prevByAM[a.am] ? prevByAM[a.am].total/prevByAM[a.am].count : 0;
-      return {name:a.am, change:(a.sAvg - prevAvg)};
-    }).sort((a,b)=>b.change-a.change)[0];
-
+    const prevByAM = {}; prev.forEach(p=>{ if(!prevByAM[p.AM]) prevByAM[p.AM]={total:0,count:0}; prevByAM[p.AM].total += p.Sales; prevByAM[p.AM].count++; });
+    const improvedArea = amStatsGlobal.map(a=>{ const prevAvg = prevByAM[a.am] ? prevByAM[a.am].total/prevByAM[a.am].count : 0; return {name:a.am, change:(a.sAvg - prevAvg)}; }).sort((a,b)=>b.change-a.change)[0];
     const rankMetric = (metric, asc) => [...amStatsGlobal].sort((a,b) => asc ? a[metric] - b[metric] : b[metric] - a[metric]).slice(0,3);
     const buildSubPodium = (title, metric, asc, fmt, displayMode) => {
       const ranked = rankMetric(metric, asc);
-      const formatVal = (val) => {
- if (displayMode === 'currency') return '£' + (val || 0).toFixed(2);
- if (displayMode === 'whole') return (val || 0).toFixed(0);
- return ((val || 0) * 100).toFixed(fmt) + '%';
- };
-      return `
-        <div class="card p-4 text-center">
-          <h4 class="text-xs font-black muted uppercase mb-3">${title}</h4>
-          <div class="flex justify-between items-end gap-2">
-            <div class="flex-1 text-[10px]"><b>2nd</b><br>${ranked[1]?.am || '—'}<br>${formatVal(ranked[1]?.[metric])}</div>
-            <div class="flex-1 text-[11px] pb-1 border-b-2 border-birds-green">👑 <b>1st</b><br>${ranked[0]?.am || '—'}<br>${formatVal(ranked[0]?.[metric])}</div>
-            <div class="flex-1 text-[10px]"><b>3rd</b><br>${ranked[2]?.am || '—'}<br>${formatVal(ranked[2]?.[metric])}</div>
-          </div>
-        </div>`;
+      const formatVal = (val) => { if (displayMode === 'currency') return '£' + (val || 0).toFixed(2); if (displayMode === 'whole') return (val || 0).toFixed(0); return ((val || 0) * 100).toFixed(fmt) + '%'; };
+      return `<div class="card p-4 text-center"><h4 class="text-xs font-black muted uppercase mb-3">${title}</h4><div class="flex justify-between items-end gap-2"><div class="flex-1 text-[10px]"><b>2nd</b><br>${ranked[1]?.am || '—'}<br>${formatVal(ranked[1]?.[metric])}</div><div class="flex-1 text-[11px] pb-1 border-b-2 border-birds-green">👑 <b>1st</b><br>${ranked[0]?.am || '—'}<br>${formatVal(ranked[0]?.[metric])}</div><div class="flex-1 text-[10px]"><b>3rd</b><br>${ranked[2]?.am || '—'}<br>${formatVal(ranked[2]?.[metric])}</div></div></div>`;
     };
-
     const prevByStore = new Map(prev.map(p=>[p.Branch, p.Sales]));
-    const improvedStore = curr.map(c=>{
-      const p = prevByStore.get(c.Branch) || 0;
-      return {name: c.Branch, change: (c.Sales - p)};
-    }).sort((a,b)=>b.change-a.change)[0];
-
+    const improvedStore = curr.map(c=>{ const p = prevByStore.get(c.Branch) || 0; return {name: c.Branch, change: (c.Sales - p)}; }).sort((a,b)=>b.change-a.change)[0];
     const improvedStoreHtml = `
     <div class="card p-4 text-center mb-6 border-t-4 border-t-amber-400">
       <h4 class="text-xs font-black muted uppercase mb-1">🏬 Most Improved Store</h4>
@@ -2120,144 +1187,65 @@ try{
       <div class="text-xs text-emerald-600 font-bold">+${((improvedStore?.change||0)*100).toFixed(1)}%</div>
       <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">Sales vs Prior Period</div>
     </div>`;
-
     document.getElementById('mainView').innerHTML = `
       <div id="winners-card" class="pb-2 relative">
-  <div onclick="exportCard('winners-card', 'Winners')" class="export-btn absolute top-4 right-4 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
+        <div onclick="exportCard('winners-card', 'Winners')" class="export-btn absolute top-4 right-4 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export Dash</div>
         ${improvedStoreHtml}
-        <div class="card p-8 mb-6 text-center relative">
-          <h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2>
-          <div class="flex items-end gap-4 justify-center">
-            <div class="card p-4 h-32 flex-1 border border-slate-200"><b>2nd</b><br>${amStatsGlobal[1]?.am || '—'}</div>
-            <div class="card p-6 h-48 flex-1 winner-1st shadow-lg">👑 <b>1st Overall</b><br><b class="text-xl">${amStatsGlobal[0]?.am || '—'}</b></div>
-            <div class="card p-4 h-24 flex-1 border border-slate-200"><b>3rd</b><br>${amStatsGlobal[2]?.am || '—'}</div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          ${buildSubPodium('Sales Growth', 'sAvg', false, 1, 'percent')}
-          ${buildSubPodium('Product Target', 'pAvg', false, 1, 'percent')}
-          ${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}
-          ${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}
-          ${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}
- ${buildSubPodium('Energy Usage', 'eAvg', true, 0, 'whole')}
- </div>
+        <div class="card p-8 mb-6 text-center relative"><h2 class="font-black outfit birds-green text-2xl mb-8 mt-2">COMBINED AREA PODIUM</h2><div class="flex items-end gap-4 justify-center"><div class="card p-4 h-32 flex-1 border border-slate-200"><b>2nd</b><br>${amStatsGlobal[1]?.am || '—'}</div><div class="card p-6 h-48 flex-1 winner-1st shadow-lg">👑 <b>1st Overall</b><br><b class="text-xl">${amStatsGlobal[0]?.am || '—'}</b></div><div class="card p-4 h-24 flex-1 border border-slate-200"><b>3rd</b><br>${amStatsGlobal[2]?.am || '—'}</div></div></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${buildSubPodium('Sales Growth', 'sAvg', false, 1, 'percent')}${buildSubPodium('Product Target', 'pAvg', false, 1, 'percent')}${buildSubPodium('Waste Control', 'wAvg', true, 1, 'percent')}${buildSubPodium('Labour Efficiency', 'lAvg', true, 1, 'percent')}${buildSubPodium('ATV Standings', 'atvAvg', false, 2, 'currency')}${buildSubPodium('Energy Usage', 'eAvg', true, 0, 'whole')}</div>
       </div>`;
   }
 
   if(currentView === 'leaderboard') {
-  const baseWeek = (typeof effectiveWeek !== 'undefined') ? effectiveWeek : latestWkGlobal;
-  let currLB = [];
-  let prevLB = [];
+    const baseWeek = (typeof effectiveWeek !== 'undefined') ? effectiveWeek : latestWkGlobal;
+    let currLB = []; let prevLB = [];
+    if(currentTimeFilter === 'latest') { currLB = aggregateData(rawKpis.filter(k => k.Week === baseWeek)); prevLB = aggregateData(rawKpis.filter(k => k.Week === (baseWeek - 1))); }
+    else if(currentTimeFilter === 'last4') { currLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek && k.Week > baseWeek - 4)); prevLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek - 4 && k.Week > baseWeek - 8)); }
+    else { currLB = aggregateData(rawKpis); prevLB = []; }
 
-  if(currentTimeFilter === 'latest') {
-    currLB = aggregateData(rawKpis.filter(k => k.Week === baseWeek));
-    prevLB = aggregateData(rawKpis.filter(k => k.Week === (baseWeek - 1)));
-  } else if(currentTimeFilter === 'last4') {
-    currLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek && k.Week > baseWeek - 4));
-    prevLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek - 4 && k.Week > baseWeek - 8));
-  } else {
-    currLB = aggregateData(rawKpis);
-    prevLB = [];
+    const currSorted = [...currLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100)); const prevSorted = [...prevLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100)); const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
+    const rows = currSorted.map((r,i)=>{
+      const nowRank = i+1; const wasRank = prevRank.get(r.Branch); let delta = '<span class="text-slate-300 font-black">—</span>';
+      if(wasRank && wasRank !== nowRank) { const diff = wasRank - nowRank; if(diff > 0) delta = `<span class="text-emerald-600 font-black">▲ ${diff}</span>`; else delta = `<span class="text-red-600 font-black">▼ ${Math.abs(diff)}</span>`; }
+      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50"><td class="p-3 font-black">${nowRank}</td><td class="p-3">${delta}</td><td class="p-3 font-bold">${r.Branch}</td><td class="p-3 text-slate-500">${r.AM}</td><td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td><td class="p-3">${(r.Labour*100).toFixed(1)}%</td><td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td></tr>`;
+    }).join('');
+
+    // NEW: Added max-h-[600px] overflow-y-auto to the wrapper and absolute sticky targeting to the header
+    document.getElementById('mainView').innerHTML = `
+      <div class="card overflow-x-auto relative max-h-[600px] overflow-y-auto shadow-inner border border-slate-200">
+        <table class="w-full text-left relative">
+          <thead class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-200">
+            <tr>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Rank</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Δ</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Store</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Area</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Sales</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Labour</th>
+              <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Energy</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
-
-  const currSorted = [...currLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100));
-  const prevSorted = [...prevLB].sort((a,b)=> (b.Sales*100) - (a.Sales*100));
-  const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
-
-  const rows = currSorted.map((r,i)=>{
-    const nowRank = i+1;
-    const wasRank = prevRank.get(r.Branch);
-    let delta = '<span class="text-slate-300 font-black">—</span>';
-    if(wasRank && wasRank !== nowRank) {
-      const diff = wasRank - nowRank;
-      if(diff > 0) delta = `<span class="text-emerald-600 font-black">▲ ${diff}</span>`;
-      else delta = `<span class="text-red-600 font-black">▼ ${Math.abs(diff)}</span>`;
-    }
-
-    return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50">
-      <td class="p-3 font-black">${nowRank}</td>
-      <td class="p-3">${delta}</td>
-      <td class="p-3 font-bold">${r.Branch}</td>
-      <td class="p-3 text-slate-500">${r.AM}</td>
-      <td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td>
-      <td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
-      <td class="p-3">${(auditMap.get(r.Branch.trim().toLowerCase())?.Score||0).toFixed(1)}%</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('mainView').innerHTML = `<div class="card overflow-x-auto">
-    <table class="w-full text-left">
-      <thead>
-        <tr>
-          <th class="p-3">Rank</th>
-          <th class="p-3">Δ</th>
-          <th class="p-3">Store</th>
-          <th class="p-3">Area</th>
-          <th class="p-3">Sales</th>
-          <th class="p-3">Labour</th>
-          <th class="p-3">Energy</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
-}
 }
 
 function renderControlPanel() {
-    let rows = '';
-    const sortedStores = Array.from(storeMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
-    
+    let rows = ''; const sortedStores = Array.from(storeMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
     sortedStores.forEach(([branchId, currentAM]) => {
-        const origName = originalStoreNames.get(branchId) || branchId;
-        let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
-        rows += `
-            <div class="flex justify-between items-center border-b border-slate-100 py-3 hover:bg-slate-50 transition-colors px-2 rounded">
-                <span class="font-bold text-slate-800 text-sm w-1/2">${origName}</span>
-                <select onchange="updateStoreAM('${branchId}', this.value)" class="p-1.5 border border-slate-200 rounded-lg text-sm bg-white shadow-sm w-1/2 focus:ring-2 focus:ring-birds-green outline-none">
-                    ${options}
-                </select>
-            </div>`;
+        const origName = originalStoreNames.get(branchId) || branchId; let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
+        rows += `<div class="flex justify-between items-center border-b border-slate-100 py-3 hover:bg-slate-50 transition-colors px-2 rounded"><span class="font-bold text-slate-800 text-sm w-1/2">${origName}</span><select onchange="updateStoreAM('${branchId}', this.value)" class="p-1.5 border border-slate-200 rounded-lg text-sm bg-white shadow-sm w-1/2 focus:ring-2 focus:ring-birds-green outline-none">${options}</select></div>`;
     });
-
     document.getElementById('mainView').innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="col-span-1">
-                ${buildIngestLogPanelHTML()}
-                <div class="card p-6 mb-6">
-                    <h2 class="text-xl font-black birds-green mb-4">Add New Store</h2>
-                    <p class="text-xs text-slate-500 mb-4">Add an upcoming store to allocate it to an Area Manager immediately.</p>
-                    <div class="flex flex-col gap-3">
-                        <input type="text" id="newStoreName" placeholder="Enter Store Name..." class="border border-slate-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-birds-green outline-none w-full shadow-sm">
-                        <select id="newStoreAM" class="border border-slate-200 p-2.5 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-birds-green outline-none w-full">
-                            ${AM_LIST.map(a => `<option value="${a}">${a}</option>`).join('')}
-                        </select>
-                        <button onclick="addNewStore()" class="bg-birds hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-span-2">
-                <div class="card p-6 h-full">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-black birds-green">Store Allocation Matrix</h2>
-                        <span class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">${sortedStores.length} Stores</span>
-                    </div>
-                    <div class="max-h-[600px] overflow-y-auto pr-2">
-                        ${rows}
-                    </div>
-                </div>
-            </div>
+            <div class="col-span-1">${buildIngestLogPanelHTML()}<div class="card p-6 mb-6"><h2 class="text-xl font-black birds-green mb-4">Add New Store</h2><p class="text-xs text-slate-500 mb-4">Add an upcoming store to allocate it to an Area Manager immediately.</p><div class="flex flex-col gap-3"><input type="text" id="newStoreName" placeholder="Enter Store Name..." class="border border-slate-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-birds-green outline-none w-full shadow-sm"><select id="newStoreAM" class="border border-slate-200 p-2.5 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-birds-green outline-none w-full">${AM_LIST.map(a => `<option value="${a}">${a}</option>`).join('')}</select><button onclick="addNewStore()" class="bg-birds hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button></div></div></div>
+            <div class="col-span-2"><div class="card p-6 h-full"><div class="flex justify-between items-center mb-6"><h2 class="text-xl font-black birds-green">Store Allocation Matrix</h2><span class="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">${sortedStores.length} Stores</span></div><div class="max-h-[600px] overflow-y-auto pr-2">${rows}</div></div></div>
         </div>
     `;
 }
 
-function setView(v) {
-  currentView = v;
-  document.querySelectorAll('nav button').forEach(b => {
-    b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap';
-  });
-  renderDashboard();
-}
+function setView(v) { currentView = v; document.querySelectorAll('nav button').forEach(b => { b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap'; }); renderDashboard(); }
 </script>
 </body>
 </html>
