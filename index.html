@@ -1364,6 +1364,7 @@ async function renderTrendsPanel() {
     const existingWeeks = [...allWeeks].sort((a,b)=>a-b);
     const weeksOptions = existingWeeks.map(w => `<option value="${w}" ${archiveWeekOverride == w ? 'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
+    const storeOptions = Array.from(new Set(Array.from(originalStoreNames.values()))).filter(Boolean).sort((a,b)=>a.localeCompare(b)).map(n => `<option value="${n}"></option>`).join('');
 
     document.getElementById('mainView').innerHTML = `
         <div id="trend-card" class="card p-6 border-t-4 border-t-teal-500 relative">
@@ -1386,8 +1387,7 @@ async function renderTrendsPanel() {
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="Network">Network Average</option>
                         ${amOptions}
-                    </select>
-                    <select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
+                    </select>\n                  <input id="trendStoreFilter" list="trendStoreList" oninput="drawTrendChart()" placeholder="Search store…" class="input-chip text-sm p-2 w-full md:w-auto" />\n                  <datalist id="trendStoreList">${storeOptions}</datalist>\n                  <button onclick="exportTrendsPack()" class="btn-secondary">📦 Export Trends</button>\n<select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="" ${!archiveWeekOverride?'selected':''}>🕰️ Follow Latest</option>
                         ${weeksOptions}
                     </select>
@@ -1403,121 +1403,235 @@ async function renderTrendsPanel() {
 }
 
 async function drawTrendChart() {
+  const rawKpis = await idbGetAll('kpi');
+  const auditsAll = await idbGetAll('audits');
+
+  const metric = document.getElementById('trendMetric')?.value || 'Sales';
+  const scope = document.getElementById('trendScope')?.value || 'Network';
+  const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim();
+  const storeFilter = storeFilterRaw.toLowerCase();
+  const storeMatch = (name) => {
+    if(!storeFilter) return true;
+    return String(name||'').trim().toLowerCase().includes(storeFilter);
+  };
+
+  const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
+  const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
+
+  // Filter to year first
+  let yearKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
+  let yearAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+
+  // Apply scope + store filters up-front so week list reflects the selection
+  if(scope !== 'Network') yearKpis = yearKpis.filter(k => k.AM === scope);
+  if(scope === 'Network') yearKpis = yearKpis.filter(k => k.AM !== 'Unassigned');
+  if(storeFilter) yearKpis = yearKpis.filter(k => storeMatch(k.Branch));
+
+  if(scope !== 'Network'){
+    yearAudits = yearAudits.filter(a => {
+      const branchId = String(a.Store).trim().toLowerCase();
+      return storeMap.get(branchId) === scope;
+    });
+  }
+  if(storeFilter) yearAudits = yearAudits.filter(a => storeMatch(a.Store));
+
+  const allWeeks = new Set([
+    ...yearKpis.map(k => k.Week),
+    ...yearAudits.map(a => a.Week)
+  ]);
+  if(!allWeeks.size) {
+    const canvas = document.getElementById('trendCanvas');
+    if(canvas){
+      const ctx = canvas.getContext('2d');
+      if(trendChartInstance) trendChartInstance.destroy();
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+    return;
+  }
+
+  const minW = Math.min(...allWeeks);
+  const maxW = Math.max(...allWeeks);
+  const weeks = [];
+  for(let w=minW; w<=maxW; w++) weeks.push(w);
+
+  const pctMetrics = ['Sales','Product','Waste','Labour','FilledRolls','Sandwiches','HotRolls','HotBev','Audit'];
+
+  const dataPoints = weeks.map(w => {
+    if(metric === 'Audit'){
+      const wkAud = yearAudits.filter(a => a.Week === w);
+      if(!wkAud.length) return null;
+      const avg = wkAud.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wkAud.length;
+      return Number(avg.toFixed(1));
+    }
+
+    const wk = yearKpis.filter(k => k.Week === w);
+    if(!wk.length) return null;
+    const avg = wk.reduce((s,x)=> s + (Number(x[metric]) || 0), 0) / wk.length;
+
+    if(pctMetrics.includes(metric)) return Number((avg * 100).toFixed(1));
+    return Number(avg.toFixed(2));
+  });
+
+  const canvas = document.getElementById('trendCanvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if(trendChartInstance) trendChartInstance.destroy();
+
+  const isInverse = ['Waste','Labour','Energy'].includes(metric);
+  const lineColor = isInverse ? '#F59E0B' : '#00A88E';
+  const bgColor = isInverse ? 'rgba(245, 158, 11, 0.1)' : 'rgba(0, 168, 142, 0.1)';
+
+  const labelScope = storeFilterRaw ? storeFilterRaw : scope;
+
+  trendChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: weeks.map(w => 'Week ' + w),
+      datasets: [{
+        label: `${metric} - ${labelScope}`,
+        data: dataPoints,
+        borderColor: lineColor,
+        backgroundColor: bgColor,
+        borderWidth: 3,
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: lineColor,
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.3,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      onClick: function(evt, elements){
+        try{
+          if(elements && elements.length){
+            const idx = elements[0].index;
+            const wk = weeks[idx];
+            if(wk){ setArchiveWeekOverride(wk); setView('overview'); }
+          }
+        }catch(e){}
+      },
+      scales: {
+        y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } },
+        x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          titleFont: { family: 'Inter', size: 13, weight: 'bold' },
+          bodyFont: { family: 'Inter', size: 14, weight: 'bold' },
+          padding: 12, cornerRadius: 8,
+          callbacks: {
+            label: function(context) {
+              let val = context.parsed.y;
+              if(pctMetrics.includes(metric)) return val + '%';
+              if(metric === 'ATV') return '£' + val;
+              if(metric === 'Energy') return val + ' kWh';
+              return String(val);
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// Export the currently selected Trends view as a ZIP (PNG chart + CSV data)
+async function exportTrendsPack(){
+  try{
     const rawKpis = await idbGetAll('kpi');
     const auditsAll = await idbGetAll('audits');
 
-    const metric = document.getElementById('trendMetric').value;
-    const scope = document.getElementById('trendScope').value;
+    const metric = document.getElementById('trendMetric')?.value || 'Sales';
+    const scope = document.getElementById('trendScope')?.value || 'Network';
+    const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim();
+    const storeFilter = storeFilterRaw.toLowerCase();
+    const storeMatch = (name) => {
+      if(!storeFilter) return true;
+      return String(name||'').trim().toLowerCase().includes(storeFilter);
+    };
 
     const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
     const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
-    
-    const yearKpis = rawKpis.filter(k => (k.Year || effectiveYear) === effectiveYear);
-    const yearAudits = auditsAll.filter(a => (a.Year || effectiveYear) === effectiveYear);
 
-    const allWeeks = new Set([
-        ...yearKpis.map(k => k.Week),
-        ...yearAudits.map(a => a.Week)
-    ]);
-    
-    if(!allWeeks.size) return;
+    let yearKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
+    let yearAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+
+    if(scope !== 'Network') yearKpis = yearKpis.filter(k => k.AM === scope);
+    if(scope === 'Network') yearKpis = yearKpis.filter(k => k.AM !== 'Unassigned');
+    if(storeFilter) yearKpis = yearKpis.filter(k => storeMatch(k.Branch));
+
+    if(scope !== 'Network'){
+      yearAudits = yearAudits.filter(a => {
+        const branchId = String(a.Store).trim().toLowerCase();
+        return storeMap.get(branchId) === scope;
+      });
+    }
+    if(storeFilter) yearAudits = yearAudits.filter(a => storeMatch(a.Store));
+
+    const allWeeks = new Set([ ...yearKpis.map(k => k.Week), ...yearAudits.map(a => a.Week) ]);
+    if(!allWeeks.size){ alert('No trend data found for this selection.'); return; }
 
     const minW = Math.min(...allWeeks);
     const maxW = Math.max(...allWeeks);
     const weeks = [];
-    // Generate full timeline to show realistic spans between data points
-    for(let w=minW; w<=maxW; w++) weeks.push(w); 
-    
-    const dataPoints = weeks.map(w => {
-        if(metric === 'Audit') {
-            let weekAudits = yearAudits.filter(a => a.Week === w);
-            if (scope !== 'Network') {
-                weekAudits = weekAudits.filter(a => {
-                    const branchId = String(a.Store).trim().toLowerCase();
-                    return storeMap.get(branchId) === scope;
-                });
-            }
-            if(!weekAudits.length) return null;
-            const avg = weekAudits.reduce((sum, item) => sum + (item.Score || 0), 0) / weekAudits.length;
-            return avg.toFixed(1);
-        } else {
-            let weekData = yearKpis.filter(k => k.Week === w);
-            if (scope !== 'Network') weekData = weekData.filter(k => k.AM === scope);
-            if (scope === 'Network') weekData = weekData.filter(k => k.AM !== 'Unassigned');
-            if(!weekData.length) return null;
+    for(let w=minW; w<=maxW; w++) weeks.push(w);
 
-            const avg = weekData.reduce((sum, item) => sum + (item[metric] || 0), 0) / weekData.length;
-            if(['Sales', 'Product', 'Waste', 'Labour'].includes(metric)) return (avg * 100).toFixed(1);
-            return avg.toFixed(2);
-        }
+    const pctMetrics = ['Sales','Product','Waste','Labour','FilledRolls','Sandwiches','HotRolls','HotBev','Audit'];
+
+    const rows = weeks.map(w => {
+      if(metric === 'Audit'){
+        const wkAud = yearAudits.filter(a => a.Week === w);
+        if(!wkAud.length) return {Week:w, Value:''};
+        const avg = wkAud.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wkAud.length;
+        return {Week:w, Value:Number(avg.toFixed(1))};
+      }
+      const wk = yearKpis.filter(k => k.Week === w);
+      if(!wk.length) return {Week:w, Value:''};
+      const avg = wk.reduce((s,x)=> s + (Number(x[metric]) || 0), 0) / wk.length;
+      const val = pctMetrics.includes(metric) ? Number((avg*100).toFixed(1)) : Number(avg.toFixed(2));
+      return {Week:w, Value:val};
     });
 
+    const csvLines = ['Week,Value'].concat(rows.map(r => `${r.Week},${r.Value}`));
+    const csv = csvLines.join('\n');
+
+    const zip = new JSZip();
+
+    // Chart PNG
     const canvas = document.getElementById('trendCanvas');
-    if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    if(trendChartInstance) trendChartInstance.destroy();
+    if(canvas && canvas.toDataURL){
+      const pngBase64 = canvas.toDataURL('image/png').split(',')[1];
+      zip.file('trend_chart.png', pngBase64, {base64:true});
+    }
 
-    const isInverse = ['Waste', 'Labour', 'Energy'].includes(metric);
-    const lineColor = isInverse ? '#F59E0B' : '#00A88E';
-    const bgColor = isInverse ? 'rgba(245, 158, 11, 0.1)' : 'rgba(0, 168, 142, 0.1)';
+    zip.file('trend_data.csv', csv);
 
-    trendChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: weeks.map(w => 'Week ' + w),
-            datasets: [{
-                label: `${metric} - ${scope}`,
-                data: dataPoints,
-                borderColor: lineColor,
-                backgroundColor: bgColor,
-                borderWidth: 3,
-                pointBackgroundColor: '#ffffff',
-                pointBorderColor: lineColor,
-                pointBorderWidth: 2,
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                fill: true,
-                tension: 0.3,
-                spanGaps: true // Enables drawing continuous lines across missing weeks
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            onClick: function(evt, elements){
-                try{
-                    if(elements && elements.length){
-                        const idx = elements[0].index;
-                        const wk = weeks[idx];
-                        if(wk){ setArchiveWeekOverride(wk); setView('overview'); }
-                    }
-                }catch(e){}
-            },
-            scales: {
-                y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } },
-                x: { grid: { display: false }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    titleFont: { family: 'Inter', size: 13, weight: 'bold' },
-                    bodyFont: { family: 'Inter', size: 14, weight: 'bold' },
-                    padding: 12, cornerRadius: 8,
-                    callbacks: {
-                        label: function(context) {
-                            let val = context.parsed.y;
-                            if(['Sales', 'Product', 'Waste', 'Labour', 'Audit'].includes(metric)) return val + '%';
-                            if(metric === 'ATV') return '£' + val;
-                            return val + ' kWh';
-                        }
-                    }
-                }
-            }
-        }
-    });
+    // Add a small meta file
+    const meta = {
+      year: effectiveYear,
+      metric,
+      scope,
+      store: storeFilterRaw || ''
+    };
+    zip.file('meta.json', JSON.stringify(meta, null, 2));
+
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safe = (s) => String(s||'').replace(/[^a-z0-9\-_]+/gi,'_').replace(/_+/g,'_');
+    a.download = `Trends_${safe(metric)}_${safe(storeFilterRaw||scope)}.zip`;
+    a.click();
+  } catch(err){
+    console.error(err);
+    alert('Export failed. Check console for details.');
+  }
 }
 
 async function renderDashboard(){
