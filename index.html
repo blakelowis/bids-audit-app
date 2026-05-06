@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Birds Executive Hub - v31 Perfected Edition</title>
+  <title>Birds Executive Hub - v32 Anomaly Protected</title>
   <meta name="theme-color" content="#00A88E">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.png">
@@ -187,9 +187,8 @@ let currentTimeFilter = 'latest';
 let trendChartInstance = null;
 let archiveWeekOverride = null; 
 
-// Mocking log panel logic safely to prevent ReferenceErrors from previous versions
 function openIngestLog() {
-    alert("Ingest details mapped. Advanced log view is managed automatically in v31.");
+    alert("Ingest details mapped. Advanced log view is managed automatically in v32.");
 }
 
 function cleanStoreName(name) {
@@ -236,7 +235,8 @@ function setArchiveWeekOverride(w){
 }
 function clearArchiveWeekOverride(){ archiveWeekOverride = null; renderDashboard(); }
 
-const req = indexedDB.open('BirdsExecutiveHub_v30', 1);
+// Database version upgraded to v32 to enforce schema rebuild
+const req = indexedDB.open('BirdsExecutiveHub_v32', 1);
 req.onupgradeneeded = e => {
   const d = e.target.result;
   if(!d.objectStoreNames.contains('kpi')) d.createObjectStore('kpi', { keyPath: ['Branch','Year','Week'] });
@@ -378,6 +378,54 @@ async function validateAndCorrectData(weeksTouched){
   }
 }
 
+// THE NEW ANOMALY DETECTION ENGINE
+async function flagAnomalies() {
+    try {
+        const kpis = await idbGetAll('kpi');
+        const byBranch = {};
+        
+        kpis.forEach(k => {
+            if (!byBranch[k.Branch]) byBranch[k.Branch] = [];
+            byBranch[k.Branch].push(k);
+        });
+
+        for (const branch in byBranch) {
+            // Sort chronologically to simulate timeline
+            const stores = byBranch[branch].sort((a,b) => {
+               if ((a.Year || 0) !== (b.Year || 0)) return (a.Year || 0) - (b.Year || 0);
+               return (a.Week || 0) - (b.Week || 0);
+            });
+            
+            let lastValidSales = null;
+            
+            for (let i = 0; i < stores.length; i++) {
+               const curr = stores[i];
+               let isAnomaly = false;
+               
+               // Rule 1: Missing Data or Closed Store (-100% variance, explicit 0 sales, or 0% labour)
+               if (curr.Sales <= -0.90 || curr.__rawSales === 0 || curr.__rawSales === '0' || curr.Labour <= 0) {
+                   isAnomaly = true;
+               } 
+               // Rule 2: Sudden 30%+ drop from "normal" expectations
+               else if (lastValidSales !== null && Math.abs(curr.Sales - lastValidSales) >= 0.30) {
+                   isAnomaly = true;
+               }
+
+               curr.IsAnomaly = isAnomaly;
+               await idbPut('kpi', curr);
+
+               // Rule 3: Baseline Memory Update
+               // Only update the baseline if the week was "normal"
+               if (!isAnomaly) {
+                   lastValidSales = curr.Sales;
+               }
+            }
+        }
+    } catch (e) {
+        console.warn('Anomaly flagging failed:', e);
+    }
+}
+
 let currentAwardsYear = new Date().getFullYear();
 let currentAwardsPeriod = 'ytd';
 
@@ -386,12 +434,14 @@ async function recordPersistentWinnersForWeeks(year, weeks){
   const validAMs = AM_LIST.filter(a => a !== 'Unassigned');
 
   for(const week of weeks){
-    const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week && k.AM !== 'Unassigned');
+    // Exclude Anomaly weeks from ever winning an award
+    const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week && k.AM !== 'Unassigned' && !k.IsAnomaly);
     if(!wkKpis.length) continue;
 
     const pWk = week === 1 ? 52 : week - 1;
     const pYr = week === 1 ? year - 1 : year;
-    const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned');
+    // Exclude anomalies from previous baseline comparisons
+    const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned' && !k.IsAnomaly);
 
   try{
     const prevById = new Map(prevKpis.map(p=>[normaliseStoreId(p.Branch), p]));
@@ -420,7 +470,7 @@ async function recordPersistentWinnersForWeeks(year, weeks){
       const areaDeltas = validAMs.map(am => {
         const curr = wkKpis.filter(k => k.AM === am);
         const prev = prevKpis.filter(k => k.AM === am);
-        if(!curr.length || !prev.length) return { am, gain: -999999 }; // Fix to prevent areas with missing data winning
+        if(!curr.length || !prev.length) return { am, gain: -999999 };
         const cAvg = curr.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / curr.length;
         const pAvg = prev.reduce((a,b) => a + (_finiteOr0(b[m.id])), 0) / prev.length;
         const gain = m.order === 'desc' ? (cAvg - pAvg) : (pAvg - cAvg);
@@ -437,8 +487,6 @@ async function recordPersistentWinnersForWeeks(year, weeks){
       const areaStores = wkKpis.filter(k => k.AM === am);
       for(const m of metrics){
         let validStores = areaStores;
-        
-        // Anti-Cheat Fix: Exclude 0s for 'asc' metrics so missing data doesn't unfairly win Medals
         if (m.order === 'asc') {
             validStores = areaStores.filter(x => _finiteOr0(x[m.id]) > 0);
         }
@@ -484,8 +532,8 @@ async function renderHallOfFame(){
       if(!kpis.length){
         document.getElementById('mainView').innerHTML = `
           <div class="p-20 text-center flex flex-col items-center justify-center">
-            <h2 class="text-2xl font-black outfit text-slate-800 mb-2">v31 Improvement Logic Active!</h2>
-            <p class="text-slate-500 mb-6">Hit the "🔄 Refresh Data" button at the top to sync your master folder and calculate awards based on WoW Gains.</p>
+            <h2 class="text-2xl font-black outfit text-slate-800 mb-2">v32 Anomaly Protected Logic Active!</h2>
+            <p class="text-slate-500 mb-6">Hit the "🔄 Refresh Data" button at the top to sync your master folder and calculate awards safely.</p>
           </div>`;
         return;
       }
@@ -763,7 +811,6 @@ async function syncData() {
           for(let i=cols.hr+1; i<rows.length; i++){
             const r = rows[i]; if(!r || !r[cols.idxB] || String(r[cols.idxB]).toLowerCase().includes('total')) continue;
             
-            // Apply the smart cleaning logic to the raw branch name immediately
             let rawBranch = cleanStoreName(r[cols.idxB]);
             let branchId = rawBranch.toLowerCase();
             
@@ -773,7 +820,8 @@ async function syncData() {
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
               ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
               FilledRolls: cols.idxFR >= 0 ? parseVal(r[cols.idxFR]) : 0, Sandwiches: cols.idxSW >= 0 ? parseVal(r[cols.idxSW]) : 0,
-              HotRolls: cols.idxHR >= 0 ? parseVal(r[cols.idxHR]) : 0, HotBev: cols.idxHB >= 0 ? parseVal(r[cols.idxHB]) : 0
+              HotRolls: cols.idxHR >= 0 ? parseVal(r[cols.idxHR]) : 0, HotBev: cols.idxHB >= 0 ? parseVal(r[cols.idxHB]) : 0,
+              IsAnomaly: false // Initialized safely
             });
             insertedRows++;
           }
@@ -786,7 +834,6 @@ async function syncData() {
             const json = XLSX.utils.sheet_to_json(wb.Sheets['Scorecards']);
             for(const r of json) {
               if(r.Store) {
-                // Apply the smart cleaning logic to Audit store names as well
                 let rawStore = cleanStoreName(r.Store);
                 await idbPut('audits', { Store: rawStore, Week: sWk, Year: fileYr, Score: parseVal(r['Total score'] || r['Audit Score']) * (String(r['Total score']||'').includes('%')?100:1), Food: parseVal(r['Food safety']), Fire: parseVal(r['Fire safety']), HandS: parseVal(r['HandS ']), Journey: parseVal(r['Customer journey']), Coffee: parseVal(r['Coffee']), Focus: parseVal(r['Birds focus']) });
               }
@@ -808,7 +855,10 @@ async function syncData() {
   __missingByYear = computeMissingWeeks(seenWeeksByYear);
   const b = document.getElementById('missingWeeksBadge'); if(b) b.innerText = formatMissingBadge(__missingByYear);
   document.getElementById('ingestStatus').innerText = "Last Updated: " + new Date().toLocaleTimeString();
+  
   await validateAndCorrectData(Array.from(weeksTouched));
+  await flagAnomalies(); // THE NEW ANOMALY FIX
+
   for(const yr of Array.from(yearsTouched)) { await recordPersistentWinnersForWeeks(yr, Array.from(weeksTouched)); }
   renderDashboard();
 }
@@ -861,9 +911,11 @@ async function exportAllCardsToZip() {
 }
 
 function changeTimeFilter(val) { currentTimeFilter = val; renderDashboard(); }
+
 function aggregateData(dataArray) {
     const map = new Map();
-    dataArray.forEach(d => {
+    // THE NEW FILTER: Exclude anomalous weeks entirely from aggregations
+    dataArray.filter(d => !d.IsAnomaly).forEach(d => {
         const branchId = d.Branch.trim().toLowerCase(); const am = storeMap.get(branchId) || 'Unassigned'; if(am === 'Unassigned') return;
         if(!map.has(d.Branch)) map.set(d.Branch, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0, FilledRolls:0, Sandwiches:0, HotRolls:0, HotBev:0 });
         let obj = map.get(d.Branch); obj.count++; obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0; obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
@@ -946,7 +998,8 @@ async function drawTrendChart(storeFilterTriggered = false) {
   const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
   const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
   
-  let selKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear); 
+  // Trend chart filters out anomalies dynamically
+  let selKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && !k.IsAnomaly); 
   let selAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   
   if(scope !== 'Network') selKpis = selKpis.filter(k => k.AM === scope);
@@ -957,7 +1010,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
   
   const showCompany = (scope !== 'Network') || !!storeFilterRaw;
-  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned'); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned' && !k.IsAnomaly); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   const weekSet = new Set();
   (metric === 'Audit' ? selAudits.map(a=>a.Week) : selKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
   if(showCompany){ (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w)); }
@@ -1249,7 +1302,6 @@ async function renderDashboard(){
     else if(currentTimeFilter === 'last4') { currLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek && k.Week > baseWeek - 4)); prevLB = aggregateData(rawKpis.filter(k => k.Week <= baseWeek - 4 && k.Week > baseWeek - 8)); }
     else { currLB = aggregateData(rawKpis); prevLB = []; }
 
-    // THE FIX: Sort by composite score of the 6 KPIs
     const getCompScore = (k) => ((k.Sales||0)*100) + ((k.Product||0)*100) - ((k.Waste||0)*100) - ((k.Labour||0)*100) + (k.ATV||0) - ((k.Energy||0)/100);
 
     const currSorted = [...currLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
