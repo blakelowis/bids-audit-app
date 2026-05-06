@@ -1364,7 +1364,12 @@ async function renderTrendsPanel() {
     const existingWeeks = [...allWeeks].sort((a,b)=>a-b);
     const weeksOptions = existingWeeks.map(w => `<option value="${w}" ${archiveWeekOverride == w ? 'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
-    const storeOptions = Array.from(new Set(Array.from(originalStoreNames.values()))).filter(Boolean).sort((a,b)=>a.localeCompare(b)).map(n => `<option value="${n}"></option>`).join('');
+    const storeOptions = Array.from(new Set(Array.from(originalStoreNames.values())))
+      .filter(Boolean)
+      .sort((a,b)=>a.localeCompare(b))
+      .map(n => `<option value="${n}"></option>`)
+      .join('');
+
 
     document.getElementById('mainView').innerHTML = `
         <div id="trend-card" class="card p-6 border-t-4 border-t-teal-500 relative">
@@ -1376,18 +1381,25 @@ async function renderTrendsPanel() {
                 </div>
                 <div class="flex gap-2 w-full md:w-auto">
                     <select id="trendMetric" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
-                        <option value="Sales">Sales Growth %</option>
-                        <option value="Product">Product Target %</option>
-                        <option value="Waste">Wastage %</option>
-                        <option value="Labour">Labour %</option>
-                        <option value="ATV">Avg Trans. Val (£)</option>
-                        <option value="Energy">Energy (kWh)</option>
-                        <option value="Audit">Audit Score %</option>
-                    </select>
+                    <option value="Sales">Sales Growth %</option>
+                    <option value="Product">Product Target %</option>
+                    <option value="Waste">Wastage %</option>
+                    <option value="Labour">Labour %</option>
+                    <option value="ATV">Avg Trans. Val (£)</option>
+                    <option value="Energy">Energy (kWh)</option>
+                    <option value="HotBev">Hot Drinks %</option>
+                    <option value="HotRolls">Hot Food %</option>
+                    <option value="FilledRolls">Cold Rolls %</option>
+                    <option value="Audit">Audit Score %</option>
+                  </select>
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="Network">Network Average</option>
                         ${amOptions}
-                    </select>\n                  <input id="trendStoreFilter" list="trendStoreList" oninput="drawTrendChart()" placeholder="Search store…" class="input-chip text-sm p-2 w-full md:w-auto" />\n                  <datalist id="trendStoreList">${storeOptions}</datalist>\n                  <button onclick="exportTrendsPack()" class="btn-secondary">📦 Export Trends</button>\n<select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
+                    </select>
+                  <input id="trendStoreFilter" list="trendStoreList" oninput="drawTrendChart()" placeholder="Search store…" class="input-chip text-sm p-2 w-full md:w-auto" />
+                  <datalist id="trendStoreList">${storeOptions}</datalist>
+                  <button onclick="exportAllTrendsPNGs()" class="btn-secondary">🖼️ Export ALL Trend Graphs</button>
+<select id="archiveWeekSel" onchange="this.value?setArchiveWeekOverride(this.value):clearArchiveWeekOverride();" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="" ${!archiveWeekOverride?'selected':''}>🕰️ Follow Latest</option>
                         ${weeksOptions}
                     </select>
@@ -1418,59 +1430,63 @@ async function drawTrendChart() {
   const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
   const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
 
-  // Filter to year first
-  let yearKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
-  let yearAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+  // Selection datasets
+  let selKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
+  let selAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
 
-  // Apply scope + store filters up-front so week list reflects the selection
-  if(scope !== 'Network') yearKpis = yearKpis.filter(k => k.AM === scope);
-  if(scope === 'Network') yearKpis = yearKpis.filter(k => k.AM !== 'Unassigned');
-  if(storeFilter) yearKpis = yearKpis.filter(k => storeMatch(k.Branch));
+  // Apply area scope to selection
+  if(scope !== 'Network') selKpis = selKpis.filter(k => k.AM === scope);
+  if(scope === 'Network') selKpis = selKpis.filter(k => k.AM !== 'Unassigned');
 
   if(scope !== 'Network'){
-    yearAudits = yearAudits.filter(a => {
+    selAudits = selAudits.filter(a => {
       const branchId = String(a.Store).trim().toLowerCase();
       return storeMap.get(branchId) === scope;
     });
   }
-  if(storeFilter) yearAudits = yearAudits.filter(a => storeMatch(a.Store));
 
-  const allWeeks = new Set([
-    ...yearKpis.map(k => k.Week),
-    ...yearAudits.map(a => a.Week)
-  ]);
-  if(!allWeeks.size) {
-    const canvas = document.getElementById('trendCanvas');
-    if(canvas){
-      const ctx = canvas.getContext('2d');
-      if(trendChartInstance) trendChartInstance.destroy();
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-    }
-    return;
+  // Apply store filter to selection
+  if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch));
+  if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
+
+  // Company baseline: show only when looking at a specific area or store
+  const showCompany = (scope !== 'Network') || !!storeFilterRaw;
+  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned');
+  const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+
+  // Weeks: union of selection + company
+  const weekSet = new Set();
+  (metric === 'Audit' ? selAudits.map(a=>a.Week) : selKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
+  if(showCompany){
+    (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
   }
+  if(!weekSet.size) return;
 
-  const minW = Math.min(...allWeeks);
-  const maxW = Math.max(...allWeeks);
-  const weeks = [];
-  for(let w=minW; w<=maxW; w++) weeks.push(w);
+  const weeks = Array.from(weekSet).filter(w => w!=null).sort((a,b)=>a-b);
 
-  const pctMetrics = ['Sales','Product','Waste','Labour','FilledRolls','Sandwiches','HotRolls','HotBev','Audit'];
+  const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches'];
 
-  const dataPoints = weeks.map(w => {
-    if(metric === 'Audit'){
-      const wkAud = yearAudits.filter(a => a.Week === w);
-      if(!wkAud.length) return null;
-      const avg = wkAud.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wkAud.length;
+  const valueForWeek = (arr, week, field) => {
+    const wk = arr.filter(x => x.Week === week);
+    if(!wk.length) return null;
+    if(field === '__AUDIT__'){
+      const avg = wk.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wk.length;
       return Number(avg.toFixed(1));
     }
-
-    const wk = yearKpis.filter(k => k.Week === w);
-    if(!wk.length) return null;
-    const avg = wk.reduce((s,x)=> s + (Number(x[metric]) || 0), 0) / wk.length;
-
-    if(pctMetrics.includes(metric)) return Number((avg * 100).toFixed(1));
+    const avg = wk.reduce((s,x)=> s + (Number(x[field]) || 0), 0) / wk.length;
+    if(pctMetrics.includes(field)) return Number((avg * 100).toFixed(1));
     return Number(avg.toFixed(2));
-  });
+  };
+
+  const selectedSeries = weeks.map(w => metric === 'Audit'
+    ? valueForWeek(selAudits, w, '__AUDIT__')
+    : valueForWeek(selKpis, w, metric)
+  );
+
+  const companySeries = showCompany ? weeks.map(w => metric === 'Audit'
+    ? valueForWeek(coAudits, w, '__AUDIT__')
+    : valueForWeek(coKpis, w, metric)
+  ) : null;
 
   const canvas = document.getElementById('trendCanvas');
   if(!canvas) return;
@@ -1479,30 +1495,47 @@ async function drawTrendChart() {
 
   const isInverse = ['Waste','Labour','Energy'].includes(metric);
   const lineColor = isInverse ? '#F59E0B' : '#00A88E';
-  const bgColor = isInverse ? 'rgba(245, 158, 11, 0.1)' : 'rgba(0, 168, 142, 0.1)';
+  const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
 
   const labelScope = storeFilterRaw ? storeFilterRaw : scope;
 
+  const datasets = [
+    {
+      label: labelScope,
+      data: selectedSeries,
+      borderColor: lineColor,
+      backgroundColor: bgColor,
+      borderWidth: 3,
+      pointBackgroundColor: '#ffffff',
+      pointBorderColor: lineColor,
+      pointBorderWidth: 2,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      fill: true,
+      tension: 0.3,
+      spanGaps: true
+    }
+  ];
+
+  if(showCompany){
+    datasets.push({
+      label: 'Company Avg',
+      data: companySeries,
+      borderColor: 'rgba(59, 130, 246, 0.55)',
+      backgroundColor: 'rgba(59, 130, 246, 0.00)',
+      borderWidth: 2,
+      borderDash: [6,6],
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      fill: false,
+      tension: 0.3,
+      spanGaps: true
+    });
+  }
+
   trendChartInstance = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: weeks.map(w => 'Week ' + w),
-      datasets: [{
-        label: `${metric} - ${labelScope}`,
-        data: dataPoints,
-        borderColor: lineColor,
-        backgroundColor: bgColor,
-        borderWidth: 3,
-        pointBackgroundColor: '#ffffff',
-        pointBorderColor: lineColor,
-        pointBorderWidth: 2,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        fill: true,
-        tension: 0.3,
-        spanGaps: true
-      }]
-    },
+    data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1526,14 +1559,17 @@ async function drawTrendChart() {
           backgroundColor: 'rgba(15, 23, 42, 0.9)',
           titleFont: { family: 'Inter', size: 13, weight: 'bold' },
           bodyFont: { family: 'Inter', size: 14, weight: 'bold' },
-          padding: 12, cornerRadius: 8,
+          padding: 12,
+          cornerRadius: 8,
           callbacks: {
             label: function(context) {
+              const name = context.dataset?.label ? (context.dataset.label + ': ') : '';
               let val = context.parsed.y;
-              if(pctMetrics.includes(metric)) return val + '%';
-              if(metric === 'ATV') return '£' + val;
-              if(metric === 'Energy') return val + ' kWh';
-              return String(val);
+              const isPct = (metric === 'Audit') || pctMetrics.includes(metric);
+              if(isPct) return name + val + '%';
+              if(metric === 'ATV') return name + '£' + val;
+              if(metric === 'Energy') return name + val + ' kWh';
+              return name + String(val);
             }
           }
         }
@@ -1542,95 +1578,55 @@ async function drawTrendChart() {
   });
 }
 
-// Export the currently selected Trends view as a ZIP (PNG chart + CSV data)
-async function exportTrendsPack(){
+// PNG-only ZIP export of ALL trend graphs for the current selection (scope + store filter)
+async function exportAllTrendsPNGs(){
   try{
-    const rawKpis = await idbGetAll('kpi');
-    const auditsAll = await idbGetAll('audits');
+    const metrics = [
+      {id:'Sales', name:'Sales_Growth'},
+      {id:'Product', name:'Product_Target'},
+      {id:'Waste', name:'Wastage'},
+      {id:'Labour', name:'Labour'},
+      {id:'ATV', name:'ATV'},
+      {id:'Energy', name:'Energy'},
+      {id:'HotBev', name:'Hot_Drinks'},
+      {id:'HotRolls', name:'Hot_Food'},
+      {id:'FilledRolls', name:'Cold_Rolls'},
+      {id:'Audit', name:'Audit_Score'}
+    ];
 
-    const metric = document.getElementById('trendMetric')?.value || 'Sales';
-    const scope = document.getElementById('trendScope')?.value || 'Network';
-    const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim();
-    const storeFilter = storeFilterRaw.toLowerCase();
-    const storeMatch = (name) => {
-      if(!storeFilter) return true;
-      return String(name||'').trim().toLowerCase().includes(storeFilter);
-    };
-
-    const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y);
-    const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
-
-    let yearKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear);
-    let yearAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
-
-    if(scope !== 'Network') yearKpis = yearKpis.filter(k => k.AM === scope);
-    if(scope === 'Network') yearKpis = yearKpis.filter(k => k.AM !== 'Unassigned');
-    if(storeFilter) yearKpis = yearKpis.filter(k => storeMatch(k.Branch));
-
-    if(scope !== 'Network'){
-      yearAudits = yearAudits.filter(a => {
-        const branchId = String(a.Store).trim().toLowerCase();
-        return storeMap.get(branchId) === scope;
-      });
-    }
-    if(storeFilter) yearAudits = yearAudits.filter(a => storeMatch(a.Store));
-
-    const allWeeks = new Set([ ...yearKpis.map(k => k.Week), ...yearAudits.map(a => a.Week) ]);
-    if(!allWeeks.size){ alert('No trend data found for this selection.'); return; }
-
-    const minW = Math.min(...allWeeks);
-    const maxW = Math.max(...allWeeks);
-    const weeks = [];
-    for(let w=minW; w<=maxW; w++) weeks.push(w);
-
-    const pctMetrics = ['Sales','Product','Waste','Labour','FilledRolls','Sandwiches','HotRolls','HotBev','Audit'];
-
-    const rows = weeks.map(w => {
-      if(metric === 'Audit'){
-        const wkAud = yearAudits.filter(a => a.Week === w);
-        if(!wkAud.length) return {Week:w, Value:''};
-        const avg = wkAud.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wkAud.length;
-        return {Week:w, Value:Number(avg.toFixed(1))};
-      }
-      const wk = yearKpis.filter(k => k.Week === w);
-      if(!wk.length) return {Week:w, Value:''};
-      const avg = wk.reduce((s,x)=> s + (Number(x[metric]) || 0), 0) / wk.length;
-      const val = pctMetrics.includes(metric) ? Number((avg*100).toFixed(1)) : Number(avg.toFixed(2));
-      return {Week:w, Value:val};
-    });
-
-    const csvLines = ['Week,Value'].concat(rows.map(r => `${r.Week},${r.Value}`));
-    const csv = csvLines.join('\n');
-
+    const metricSel = document.getElementById('trendMetric');
+    if(!metricSel){ alert('Trend metric selector not found.'); return; }
     const zip = new JSZip();
 
-    // Chart PNG
-    const canvas = document.getElementById('trendCanvas');
-    if(canvas && canvas.toDataURL){
+    const originalMetric = metricSel.value;
+    const waitFrame = () => new Promise(res => requestAnimationFrame(() => res()));
+
+    for(const m of metrics){
+      metricSel.value = m.id;
+      await drawTrendChart();
+      await waitFrame();
+      await new Promise(r => setTimeout(r, 60));
+      const canvas = document.getElementById('trendCanvas');
+      if(!canvas || !canvas.toDataURL) continue;
       const pngBase64 = canvas.toDataURL('image/png').split(',')[1];
-      zip.file('trend_chart.png', pngBase64, {base64:true});
+      zip.file(`${m.name}.png`, pngBase64, {base64:true});
     }
 
-    zip.file('trend_data.csv', csv);
-
-    // Add a small meta file
-    const meta = {
-      year: effectiveYear,
-      metric,
-      scope,
-      store: storeFilterRaw || ''
-    };
-    zip.file('meta.json', JSON.stringify(meta, null, 2));
+    metricSel.value = originalMetric;
+    await drawTrendChart();
 
     const blob = await zip.generateAsync({type:'blob'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
+
+    const scopeNow = document.getElementById('trendScope')?.value || 'Network';
+    const storeNow = (document.getElementById('trendStoreFilter')?.value || '').trim();
     const safe = (s) => String(s||'').replace(/[^a-z0-9\-_]+/gi,'_').replace(/_+/g,'_');
-    a.download = `Trends_${safe(metric)}_${safe(storeFilterRaw||scope)}.zip`;
+    a.download = `All_Trends_${safe(storeNow||scopeNow)}.zip`;
     a.click();
   } catch(err){
     console.error(err);
-    alert('Export failed. Check console for details.');
+    alert('Export ALL trends failed. Check console for details.');
   }
 }
 
