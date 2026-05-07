@@ -9,16 +9,18 @@
   <link rel="apple-touch-icon" href="./icon-192.png">
 
   <script>
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('./sw.js').then(function(registration) {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        }, function(err) {
-          console.log('ServiceWorker registration failed: ', err);
-        });
+  // Service workers are useful on the web, but are not supported/reliable inside a Tauri desktop shell.
+  // Only register SW when running on http(s) (e.g., when hosted as a PWA in a browser).
+  if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:') && !window.__TAURI__) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('./sw.js').then(function(registration) {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }, function(err) {
+        console.log('ServiceWorker registration failed: ', err);
       });
-    }
-  </script>
+    });
+  }
+</script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -154,7 +156,10 @@
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
       </div>
-    </header>
+    
+
+
+</header>
 
     <nav class="segmented flex flex-wrap items-center gap-1 mb-8">
       <button onclick="setView('overview')" id="btn-overview" class="seg-btn seg-btn-active flex-1 whitespace-nowrap">Business Overview</button>
@@ -169,6 +174,28 @@
     <main id="mainView" class="space-y-6"></main>
   </div>
 
+
+<script>
+  // ---------- Tauri desktop bridge ----------
+  function isTauriDesktop() {
+    return !!window.__TAURI__;
+  }
+  async function tauriInvoke(cmd, args) {
+    const t = window.__TAURI__;
+    if (!t) throw new Error('Tauri runtime not available');
+    if (typeof t.invoke === 'function') return await t.invoke(cmd, args || {});
+    if (t.tauri && typeof t.tauri.invoke === 'function') return await t.tauri.invoke(cmd, args || {});
+    throw new Error('Tauri invoke not found');
+  }
+  function pathBasename(p) {
+    try {
+      if (!p) return '';
+      const norm = String(p).replace(/\/g,'/');
+      const parts = norm.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length-1] : norm;
+    } catch { return ''; }
+  }
+</script>
 <script>
 const DEFAULT_AREA_MAPPING = {
   'Katie Cartwright': ['Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark','Radcliffe','Ruddington','Southwell','Sherwood','Sutton','Sutton Lakeside','Victoria Centre'],
@@ -180,7 +207,9 @@ const DEFAULT_AREA_MAPPING = {
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
 
 let db, currentView = 'overview', latestWkGlobal = 0;
-let directoryHandle = null; 
+let directoryHandle = null;
+let __anchorMeta = { folderName: null, anchoredAt: null, perm: null, storagePersisted: null };
+ 
 let storeMap = new Map();
 let originalStoreNames = new Map();
 let currentTimeFilter = 'latest';
@@ -549,7 +578,9 @@ async function renderHallOfFame(){
       const storeLog = await idbGetAll('store_winners_log');
       const areaLog = await idbGetAll('area_winners_log');
 
-      let periodStores = storeLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
+      const selectedAM = document.getElementById('ytdFilter')?.value || 'All';
+let filteredStores = selectedAM === 'All' ? storeLog : storeLog.filter(w=>{const id=w.Branch?.toLowerCase(); return storeMap.get(id)===selectedAM;});
+let periodStores = filteredStores.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
       let periodAreas = areaLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
 
       if(periodStores.length === 0){
@@ -613,7 +644,7 @@ async function renderHallOfFame(){
             <select onchange="currentAwardsYear=parseInt(this.value); renderHallOfFame();" class="input-chip text-sm">
               ${years.map(y=>`<option value="${y}" ${y===currentAwardsYear?'selected':''}>Season ${y}</option>`).join('')}
             </select>
-            <select onchange="currentAwardsPeriod=this.value; renderHallOfFame();" class="input-chip text-sm">
+            <select id='ytdFilter' onchange='renderHallOfFame()' class='input-chip text-sm'><option>All</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select><select onchange="currentAwardsPeriod=this.value; renderHallOfFame();" class="input-chip text-sm">
               <option value="ytd" ${currentAwardsPeriod==='ytd'?'selected':''}>📈 YTD</option>
               <option value="q1" ${currentAwardsPeriod==='q1'?'selected':''}>Q1 (Wk 1–13)</option>
               <option value="q2" ${currentAwardsPeriod==='q2'?'selected':''}>Q2 (Wk 14–26)</option>
@@ -742,20 +773,102 @@ function parseDateSafe(val) {
 }
 
 async function loadDirectoryHandle() {
+  try {
+    // Check whether the browser is likely to evict IndexedDB/cache data
     try {
-        const settings = await idbGetAll('settings');
-        const savedHandle = settings.find(s => s.id === 'masterFolder');
-        if (savedHandle && savedHandle.dirHandle) { directoryHandle = savedHandle.dirHandle; document.getElementById('folderStatus').innerText = `Status: Anchored to Persistent Folder`; }
-    } catch(e) {}
+      if (navigator.storage && navigator.storage.persisted) {
+        __anchorMeta.storagePersisted = await navigator.storage.persisted();
+      }
+    } catch (_) {}
+
+    const settings = await idbGetAll('settings');
+    const saved = settings.find(s => s.id === 'masterFolder');
+    const statusEl = document.getElementById('folderStatus');
+
+    if (!saved || !saved.dirHandle) {
+      directoryHandle = null;
+      __anchorMeta.folderName = null;
+      __anchorMeta.anchoredAt = null;
+      __anchorMeta.perm = null;
+      if (statusEl) statusEl.innerText = 'Status: Not Anchored';
+      return;
+    }
+
+    // Restore handle + meta
+    directoryHandle = saved.dirHandle;
+    __anchorMeta.folderName = saved.folderName || (directoryHandle && directoryHandle.name) || null;
+    __anchorMeta.anchoredAt = saved.anchoredAt || null;
+
+    // Query permission without prompting (prompting requires a user gesture)
+    let perm = null;
+    try {
+      perm = await directoryHandle.queryPermission({ mode: 'read' });
+    } catch (_) {
+      perm = null;
+    }
+    __anchorMeta.perm = perm;
+
+    const folderLabel = __anchorMeta.folderName ? (' — ' + __anchorMeta.folderName) : '';
+    const lockLine = (perm === 'granted')
+      ? '✅ Locked (auto-restored)'
+      : (perm === 'prompt')
+        ? '⚠️ Locked (needs permission — press Refresh Data once)'
+        : '⚠️ Locked (permission denied — reselect folder)';
+
+    const persistLine = (__anchorMeta.storagePersisted === true)
+      ? ' • Storage: persistent'
+      : (__anchorMeta.storagePersisted === false)
+        ? ' • Storage: Local (Desktop Mode)'
+        : '';
+
+    if (statusEl) statusEl.innerText = 'Status: ' + lockLine + folderLabel + persistLine;
+  } catch (e) {
+    console.warn('loadDirectoryHandle failed', e);
+    try {
+      const statusEl = document.getElementById('folderStatus');
+      if (statusEl) statusEl.innerText = 'Status: Not Anchored';
+    } catch (_) {}
+  }
 }
 
 async function selectAndAnchorFolder() {
+  try {
+    // Request persistent storage (best-effort) to reduce IndexedDB eviction
     try {
-        directoryHandle = await window.showDirectoryPicker();
-        await idbPut('settings', { id: 'masterFolder', dirHandle: directoryHandle });
-        document.getElementById('folderStatus').innerText = `Status: Anchored to Persistent Folder`;
-        await syncData();
-    } catch (err) {}
+      if (navigator.storage && navigator.storage.persist) {
+        const already = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+        if (!already) {
+          await navigator.storage.persist();
+        }
+        __anchorMeta.storagePersisted = navigator.storage.persisted ? await navigator.storage.persisted() : __anchorMeta.storagePersisted;
+      }
+    } catch (_) {}
+
+    directoryHandle = await window.showDirectoryPicker();
+
+    __anchorMeta.folderName = (directoryHandle && directoryHandle.name) || null;
+    __anchorMeta.anchoredAt = Date.now();
+
+    await idbPut('settings', {
+      id: 'masterFolder',
+      dirHandle: directoryHandle,
+      folderName: __anchorMeta.folderName,
+      anchoredAt: __anchorMeta.anchoredAt
+    });
+
+    const statusEl = document.getElementById('folderStatus');
+    const folderLabel = __anchorMeta.folderName ? (' — ' + __anchorMeta.folderName) : '';
+    const persistLine = (__anchorMeta.storagePersisted === true)
+      ? ' • Storage: persistent'
+      : (__anchorMeta.storagePersisted === false)
+        ? ' • Storage: Local (Desktop Mode)'
+        : '';
+    if (statusEl) statusEl.innerText = 'Status: ✅ Locked (selected)' + folderLabel + persistLine;
+
+    await syncData();
+  } catch (err) {
+    console.warn('selectAndAnchorFolder cancelled/failed', err);
+  }
 }
 
 async function verifyPermission(fileHandle, readWrite) {
@@ -781,7 +894,7 @@ function formatMissingBadge(m){ const years = Object.keys(m||{}); if(!years.leng
 async function syncData() {
   if (!directoryHandle) { alert("Please anchor a master folder first using 'Select Master Folder'."); return; }
   const hasPerm = await verifyPermission(directoryHandle, false);
-  if(!hasPerm) { alert("Permission to read the folder was denied."); return; }
+  if(!hasPerm) { alert("Permission is needed to access the anchored folder. When prompted, choose Allow. If you no longer have access, use ‘Select Master Folder’ to re-anchor."); return; }
   document.getElementById('ingestStatus').innerText = "Scanning Folder... Please wait.";
   let cachedFiles = [];
   try {
@@ -960,7 +1073,7 @@ async function renderTrendsPanel() {
                     <option value="FilledRolls">Cold Rolls %</option>
                     <option value="Audit">Audit Score %</option>
                   </select>
-                    <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
+                    <select id='trendAM' onchange='drawTrendChart()' class='input-chip text-sm'><option value='Network'>All AMs</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select><select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
                         <option value="Network">Network Average</option>
                         ${amOptions}
                     </select>
@@ -993,7 +1106,8 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if (storeFilterTriggered && storeFilter) {
       document.getElementById('trendScope').value = 'Network';
   }
-  const scope = document.getElementById('trendScope')?.value || 'Network';
+  const selectedAM = document.getElementById('trendAM')?.value || 'Network';
+const scope = selectedAM || 'Network';
   
   const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
   const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
@@ -1304,27 +1418,30 @@ async function renderDashboard(){
 
     const getCompScore = (k) => ((k.Sales||0)*100) + ((k.Product||0)*100) - ((k.Waste||0)*100) - ((k.Labour||0)*100) + (k.ATV||0) - ((k.Energy||0)/100);
 
-    const currSorted = [...currLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
+    const fullSorted = [...currLB].sort((a,b)=> getCompScore(b) - getCompScore(a));
+const topStore = fullSorted[0]?.Branch; 
     const prevSorted = [...prevLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
     const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
 
-    const rows = currSorted.map((r,i)=>{
-      const nowRank = i+1; const wasRank = prevRank.get(r.Branch); let delta = '<span class="text-slate-300 font-black">—</span>';
-      if(wasRank && wasRank !== nowRank) { const diff = wasRank - nowRank; if(diff > 0) delta = `<span class="text-emerald-600 font-black">▲ ${diff}</span>`; else delta = `<span class="text-red-600 font-black">▼ ${Math.abs(diff)}</span>`; }
-      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50">
-        <td class="p-3 font-black">${nowRank}</td>
-        <td class="p-3">${delta}</td>
-        <td class="p-3 font-bold">${r.Branch}</td>
-        <td class="p-3 text-slate-500">${r.AM}</td>
-        <td class="p-3 font-black text-indigo-600">${getCompScore(r).toFixed(1)}</td>
-        <td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td>
-        <td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
-        <td class="p-3">${(r.Energy).toFixed(0)} kWh</td>
-      </tr>`;
-    }).join('');
+    const selectedAM = document.getElementById('lbFilter')?.value || 'All';
+const rows = fullSorted
+.map((r,i)=> ({...r, rank: i+1}))
+.filter(r => selectedAM === 'All' || r.AM === selectedAM)
+.map(r=>{
+return `<tr class="border-b border-slate-100 text-[11px]">
+<td class="p-3 font-black">${r.rank}</td>
+<td class="p-3">—</td>
+<td class="p-3 font-bold">${r.Branch} ${r.Branch===topStore?'🏆':''}</td>
+<td class="p-3">${r.AM}</td>
+<td class="p-3">${getCompScore(r).toFixed(1)}</td>
+<td class="p-3">${(r.Sales*100).toFixed(1)}%</td>
+<td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
+<td class="p-3">${(r.Energy).toFixed(0)}</td>
+</tr>`;
+}).join('');
 
     document.getElementById('mainView').innerHTML = `
-      <div class="card overflow-x-auto relative max-h-[600px] overflow-y-auto shadow-inner border border-slate-200">
+      <div class='mb-2'><select id='lbFilter' onchange='renderDashboard()' class='input-chip'><option>All</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select></div><div class="card overflow-x-auto relative max-h-[600px] overflow-y-auto shadow-inner border border-slate-200">
         <table class="w-full text-left relative">
           <thead class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-200">
             <tr>
@@ -1370,5 +1487,9 @@ function renderControlPanel() {
 
 function setView(v) { currentView = v; document.querySelectorAll('nav button').forEach(b => { b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap'; }); renderDashboard(); }
 </script>
+
+<script>
+</script>
+
 </body>
 </html>
