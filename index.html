@@ -432,7 +432,7 @@ async function flagAnomalies() {
                let isAnomaly = false;
                
                // Rule 1: Missing Data or Closed Store (-100% variance, explicit 0 sales, or 0% labour)
-               if (curr.Sales <= -0.90 || curr.__rawSales === 0 || curr.__rawSales === '0' || curr.Labour <= 0) {
+               const raw = curr.__rawSales; const rawNum = Number(raw); if (curr.Sales <= -0.90 || raw === null || raw === undefined || raw === '' || rawNum === 0 || !Number.isFinite(rawNum) || curr.Labour <= 0) {
                    isAnomaly = true;
                } 
                // Rule 2: Sudden 30%+ drop from "normal" expectations
@@ -1073,11 +1073,7 @@ async function renderTrendsPanel() {
                     <option value="FilledRolls">Cold Rolls %</option>
                     <option value="Audit">Audit Score %</option>
                   </select>
-                    <select id='trendAM' onchange='drawTrendChart()' class='input-chip text-sm'><option value='Network'>All AMs</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select><select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
-                        <option value="Network">Network Average</option>
-                        ${amOptions}
-                    </select>
-                  <select id="trendStoreFilter" onchange="drawTrendChart(true)" class="input-chip text-sm p-2 w-full md:w-auto">
+ \n \<select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto"> \n \<option value="Network">Network Average</option> \n ${amOptions} \n \</select> \n<select id="trendStoreFilter" onchange="drawTrendChart(true)" class="input-chip text-sm p-2 w-full md:w-auto">
                       <option value="">🏢 Select a specific store...</option>
                       ${storeOptions}
                   </select>
@@ -1106,7 +1102,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if (storeFilterTriggered && storeFilter) {
       document.getElementById('trendScope').value = 'Network';
   }
-  const selectedAM = document.getElementById('trendAM')?.value || 'Network';
+  const selectedAM = document.getElementById('trendScope')?.value || 'Network';
 const scope = selectedAM || 'Network';
   
   const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
@@ -1418,7 +1414,11 @@ async function renderDashboard(){
 
     const getCompScore = (k) => ((k.Sales||0)*100) + ((k.Product||0)*100) - ((k.Waste||0)*100) - ((k.Labour||0)*100) + (k.ATV||0) - ((k.Energy||0)/100);
 
-    const fullSorted = [...currLB].sort((a,b)=> getCompScore(b) - getCompScore(a));
+    const isClosedStore = (branch) => rawKpis.some(k => k.Branch === branch && k.IsAnomaly === true && k.Week === baseWeek);
+const activeStores = currLB.filter(r => !isClosedStore(r.Branch));
+const closedStores = currLB.filter(r => isClosedStore(r.Branch));
+const sortedActive = [...activeStores].sort((a,b)=> getCompScore(b) - getCompScore(a));
+const fullSorted = [...sortedActive, ...closedStores];
 const topStore = fullSorted[0]?.Branch; 
     const prevSorted = [...prevLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
     const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
@@ -1430,10 +1430,10 @@ const rows = fullSorted
 .map(r=>{
 return `<tr class="border-b border-slate-100 text-[11px]">
 <td class="p-3 font-black">${r.rank}</td>
-<td class="p-3">—</td>
-<td class="p-3 font-bold">${r.Branch} ${r.Branch===topStore?'🏆':''}</td>
+<td class="p-3 font-bold ${(() => {const prev = prevRank.get(r.Branch); if (!prev) return 'text-slate-400'; const diff = prev - r.rank; if (diff > 0) return 'text-green-600'; if (diff < 0) return 'text-red-600'; return 'text-slate-400';})()}">${(() => {const prev = prevRank.get(r.Branch); if (!prev) return '—'; const diff = prev - r.rank; if (diff > 0) return '▲ ' + diff; if (diff < 0) return '▼ ' + Math.abs(diff); return '—';})()}</td>
+<td class="p-3 font-bold">${r.Branch} ${r.Branch===topStore?'🏆':''}${rawKpis.some(k => k.Branch===r.Branch && k.IsAnomaly && k.Week===baseWeek) ? '<span style=\"margin-left:6px;font-size:9px;font-weight:bold;background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:6px\">⛔ Closed / Excluded</span>' : ''}</td>
 <td class="p-3">${r.AM}</td>
-<td class="p-3">${getCompScore(r).toFixed(1)}</td>
+<td class="p-3">${rawKpis.some(k => k.Branch===r.Branch && k.IsAnomaly && k.Week===baseWeek) ? '—' : getCompScore(r).toFixed(1)}</td>
 <td class="p-3">${(r.Sales*100).toFixed(1)}%</td>
 <td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
 <td class="p-3">${(r.Energy).toFixed(0)}</td>
