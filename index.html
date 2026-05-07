@@ -9,6 +9,25 @@
   <link rel="apple-touch-icon" href="./icon-192.png">
 
   <script>
+
+// --- V32.2 LOGIC PATCH: SAFE SCORING & FILTERING ---
+function safeIsStoreClosed(curr, prev) {
+    if (!prev || (prev.Sales || prev.sales || 0) === 0) return false; // Can't drop 50% from 0
+    const sDrop = (curr.Sales || curr.sales || 0) < ((prev.Sales || prev.sales || 0) * 0.5);
+    const tDrop = (curr.Transactions || curr.transactions || 0) < ((prev.Transactions || prev.transactions || 0) * 0.5);
+    return sDrop && tDrop;
+}
+
+function safeCalcImprovement(currScore, prevScore) {
+    if (!prevScore || prevScore === 0) {
+        // Prevent 'Infinity' dividing by zero. Cap bounce-backs at 100% improvement max.
+        return (currScore && currScore > 0) ? 100 : 0;
+    }
+    let imp = ((currScore - prevScore) / Math.abs(prevScore)) * 100;
+    return isNaN(imp) || !isFinite(imp) ? 0 : imp;
+}
+// ---------------------------------------------------
+
   // Service workers are useful on the web, but are not supported/reliable inside a Tauri desktop shell.
   // Only register SW when running on http(s) (e.g., when hosted as a PWA in a browser).
   if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:') && !window.__TAURI__) {
@@ -154,6 +173,7 @@
         </select>
         <button onclick="selectAndAnchorFolder()" class="btn-primary">📂 Select Master Folder</button>
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
+        <button onclick="restoreLastSnapshot()" class="btn-secondary" style="background-color: #f59e0b;">⏪ Undo Last Refresh</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
       </div>
     
@@ -772,7 +792,85 @@ function parseDateSafe(val) {
     return d;
 }
 
+
+// ============================================================================
+// V32.1 UPGRADES: PERSISTENCE, ANCHORING & SNAPSHOTS
+// ============================================================================
+async function ensurePersistence() {
+  if (navigator.storage && navigator.storage.persist) {
+    const isPersisted = await navigator.storage.persist();
+    if(typeof __anchorMeta !== 'undefined') __anchorMeta.storagePersisted = isPersisted;
+    console.log(`[Persistence] Storage locked to disk: ${isPersisted}`);
+    return isPersisted;
+  }
+  return false;
+}
+
 async function loadDirectoryHandle() {
+  await ensurePersistence();
+  const settings = await idbGetAll('settings');
+  const savedHandle = settings.find(s => s.id === 'folder_handle');
+  
+  if (savedHandle && savedHandle.handle) {
+    try {
+      const status = await savedHandle.handle.requestPermission({ mode: 'readwrite' });
+      if (status === 'granted') {
+        directoryHandle = savedHandle.handle;
+        document.getElementById('folderStatus').innerText = `Status: Anchored to Shared Drive (${directoryHandle.name})`;
+        document.getElementById('folderStatus').classList.add('text-birds-green');
+        return true;
+      }
+    } catch (e) {
+      console.log("Shared folder link expired or moved.");
+    }
+  }
+  document.getElementById('folderStatus').innerText = "Status: Anchor Permission Lost / Re-select Folder";
+  return false;
+}
+
+async function selectAndAnchorFolder() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    directoryHandle = handle;
+    await idbPut('settings', { id: 'folder_handle', handle: handle });
+    await ensurePersistence();
+    document.getElementById('folderStatus').innerText = `Status: Anchored to Shared Drive (${handle.name})`;
+    document.getElementById('folderStatus').classList.add('text-birds-green');
+    alert("Folder successfully anchored!");
+  } catch (err) {
+    console.error("Folder selection failed:", err);
+  }
+}
+
+async function createDataSnapshot() {
+  const kpis = await idbGetAll('kpi');
+  const audits = await idbGetAll('audits');
+  await idbPut('settings', { 
+    id: 'last_snapshot', 
+    data: { timestamp: new Date().toISOString(), kpis: kpis, audits: audits } 
+  });
+  console.log("[System] Data snapshot created before sync.");
+}
+
+async function restoreLastSnapshot() {
+  if(!confirm("Are you sure you want to rollback to the previous data state? This reverses the last refresh.")) return;
+  const settings = await idbGetAll('settings');
+  const snapRec = settings.find(s => s.id === 'last_snapshot');
+  
+  if (snapRec && snapRec.data) {
+    await idbClear('kpi');
+    await idbClear('audits');
+    for (const k of snapRec.data.kpis) await idbPut('kpi', k);
+    for (const a of snapRec.data.audits) await idbPut('audits', a);
+    alert("Successfully reverted to the previous data state.");
+    if(typeof renderDashboard === 'function') renderDashboard();
+  } else {
+    alert("No previous backup state found.");
+  }
+}
+// ============================================================================
+
+async function old_loadDirectoryHandle_Disabled() {
   try {
     // Check whether the browser is likely to evict IndexedDB/cache data
     try {
@@ -831,7 +929,7 @@ async function loadDirectoryHandle() {
   }
 }
 
-async function selectAndAnchorFolder() {
+async function old_selectAndAnchorFolder_Disabled() {
   try {
     // Request persistent storage (best-effort) to reduce IndexedDB eviction
     try {
@@ -892,6 +990,7 @@ function computeMissingWeeks(seenByYear){ const missing = {}; Object.keys(seenBy
 function formatMissingBadge(m){ const years = Object.keys(m||{}); if(!years.length) return ''; return '⚠️ ' + years.map(y=>'Y'+y+': missing '+(m[y]||[]).length+'wk').join(' • '); }
 
 async function syncData() {
+    if (typeof createDataSnapshot === "function") await createDataSnapshot(); // V32.1 Patch
   if (!directoryHandle) { alert("Please anchor a master folder first using 'Select Master Folder'."); return; }
   const hasPerm = await verifyPermission(directoryHandle, false);
   if(!hasPerm) { alert("Permission is needed to access the anchored folder. When prompted, choose Allow. If you no longer have access, use ‘Select Master Folder’ to re-anchor."); return; }
