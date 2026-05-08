@@ -9,94 +9,16 @@
   <link rel="apple-touch-icon" href="./icon-192.png">
 
   <script>
-
-// ============================================================================
-// V32.3 PATCH: PERMANENT AM OVERRIDES
-// ============================================================================
-async function saveAMOverride(storeName, newAM) {
-    const settings = await idbGetAll('settings');
-    let overrideRec = settings.find(s => s.id === 'am_overrides') || { id: 'am_overrides', data: {} };
-    
-    // Save the new allocation
-    overrideRec.data[storeName] = newAM;
-    await idbPut('settings', overrideRec);
-    
-    console.log(`[Override Authority] ${storeName} permanently locked to ${newAM}`);
-    
-    // Apply instantly to the current session and refresh the UI
-    await applyAMOverrides();
-    if(typeof renderDashboard === 'function') renderDashboard();
-}
-
-async function applyAMOverrides() {
-    const settings = await idbGetAll('settings');
-    const overrideRec = settings.find(s => s.id === 'am_overrides');
-    if (!overrideRec || !overrideRec.data) return;
-    
-    const overrides = overrideRec.data;
-    const kpis = await idbGetAll('kpi');
-    const audits = await idbGetAll('audits');
-    
-    console.log("[System] Enforcing manual AM Overrides against Excel data...");
-    
-    // Overrule Excel data in the KPI store
-    for (let kpi of kpis) {
-        const storeName = kpi.Branch || kpi.Store; 
-        if (storeName && overrides[storeName] && kpi.AreaManager !== overrides[storeName]) {
-            kpi.AreaManager = overrides[storeName];
-            await idbPut('kpi', kpi);
-        }
-    }
-    
-    // Overrule Excel data in the Audits store
-    for (let audit of audits) {
-         const storeName = audit.Branch || audit.Store;
-         if (storeName && overrides[storeName] && audit.AreaManager !== overrides[storeName]) {
-             audit.AreaManager = overrides[storeName];
-             await idbPut('audits', audit);
-         }
-    }
-}
-
-// Our new wrapper that runs your original sync, then enforces our overrides
-async function syncData() {
-    await old_syncData_ForOverride(); // Let the Excel import do its thing
-    await applyAMOverrides();         // Fix any Excel mistakes instantly
-    if(typeof renderDashboard === 'function') renderDashboard();
-}
-// ============================================================================
-
-
-// --- V32.2 LOGIC PATCH: SAFE SCORING & FILTERING ---
-function safeIsStoreClosed(curr, prev) {
-    if (!prev || (prev.Sales || prev.sales || 0) === 0) return false; // Can't drop 50% from 0
-    const sDrop = (curr.Sales || curr.sales || 0) < ((prev.Sales || prev.sales || 0) * 0.5);
-    const tDrop = (curr.Transactions || curr.transactions || 0) < ((prev.Transactions || prev.transactions || 0) * 0.5);
-    return sDrop && tDrop;
-}
-
-function safeCalcImprovement(currScore, prevScore) {
-    if (!prevScore || prevScore === 0) {
-        // Prevent 'Infinity' dividing by zero. Cap bounce-backs at 100% improvement max.
-        return (currScore && currScore > 0) ? 100 : 0;
-    }
-    let imp = ((currScore - prevScore) / Math.abs(prevScore)) * 100;
-    return isNaN(imp) || !isFinite(imp) ? 0 : imp;
-}
-// ---------------------------------------------------
-
-  // Service workers are useful on the web, but are not supported/reliable inside a Tauri desktop shell.
-  // Only register SW when running on http(s) (e.g., when hosted as a PWA in a browser).
-  if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:') && !window.__TAURI__) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('./sw.js').then(function(registration) {
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-      }, function(err) {
-        console.log('ServiceWorker registration failed: ', err);
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(registration) {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, function(err) {
+          console.log('ServiceWorker registration failed: ', err);
+        });
       });
-    });
-  }
-</script>
+    }
+  </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -230,13 +152,9 @@ function safeCalcImprovement(currScore, prevScore) {
         </select>
         <button onclick="selectAndAnchorFolder()" class="btn-primary">📂 Select Master Folder</button>
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
-        <button onclick="restoreLastSnapshot()" class="btn-secondary" style="background-color: #f59e0b;">⏪ Undo Last Refresh</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
       </div>
-    
-
-
-</header>
+    </header>
 
     <nav class="segmented flex flex-wrap items-center gap-1 mb-8">
       <button onclick="setView('overview')" id="btn-overview" class="seg-btn seg-btn-active flex-1 whitespace-nowrap">Business Overview</button>
@@ -251,28 +169,6 @@ function safeCalcImprovement(currScore, prevScore) {
     <main id="mainView" class="space-y-6"></main>
   </div>
 
-
-<script>
-  // ---------- Tauri desktop bridge ----------
-  function isTauriDesktop() {
-    return !!window.__TAURI__;
-  }
-  async function tauriInvoke(cmd, args) {
-    const t = window.__TAURI__;
-    if (!t) throw new Error('Tauri runtime not available');
-    if (typeof t.invoke === 'function') return await t.invoke(cmd, args || {});
-    if (t.tauri && typeof t.tauri.invoke === 'function') return await t.tauri.invoke(cmd, args || {});
-    throw new Error('Tauri invoke not found');
-  }
-  function pathBasename(p) {
-    try {
-      if (!p) return '';
-      const norm = String(p).replace(/\/g,'/');
-      const parts = norm.split('/').filter(Boolean);
-      return parts.length ? parts[parts.length-1] : norm;
-    } catch { return ''; }
-  }
-</script>
 <script>
 const DEFAULT_AREA_MAPPING = {
   'Katie Cartwright': ['Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark','Radcliffe','Ruddington','Southwell','Sherwood','Sutton','Sutton Lakeside','Victoria Centre'],
@@ -509,7 +405,7 @@ async function flagAnomalies() {
                let isAnomaly = false;
                
                // Rule 1: Missing Data or Closed Store (-100% variance, explicit 0 sales, or 0% labour)
-               const raw = curr.__rawSales; const rawNum = Number(raw); if (curr.Sales <= -0.90 || raw === null || raw === undefined || raw === '' || rawNum === 0 || !Number.isFinite(rawNum) || curr.Labour <= 0) {
+               if (curr.Sales <= -0.90 || curr.__rawSales === 0 || curr.__rawSales === '0' || curr.Labour <= 0) {
                    isAnomaly = true;
                } 
                // Rule 2: Sudden 30%+ drop from "normal" expectations
@@ -655,9 +551,7 @@ async function renderHallOfFame(){
       const storeLog = await idbGetAll('store_winners_log');
       const areaLog = await idbGetAll('area_winners_log');
 
-      const selectedAM = document.getElementById('ytdFilter')?.value || 'All';
-let filteredStores = selectedAM === 'All' ? storeLog : storeLog.filter(w=>{const id=w.Branch?.toLowerCase(); return storeMap.get(id)===selectedAM;});
-let periodStores = filteredStores.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
+      let periodStores = storeLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
       let periodAreas = areaLog.filter(l => l.Year === currentAwardsYear && l.Week >= from && l.Week <= to);
 
       if(periodStores.length === 0){
@@ -721,7 +615,7 @@ let periodStores = filteredStores.filter(l => l.Year === currentAwardsYear && l.
             <select onchange="currentAwardsYear=parseInt(this.value); renderHallOfFame();" class="input-chip text-sm">
               ${years.map(y=>`<option value="${y}" ${y===currentAwardsYear?'selected':''}>Season ${y}</option>`).join('')}
             </select>
-            <select id='ytdFilter' onchange='renderHallOfFame()' class='input-chip text-sm'><option>All</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select><select onchange="currentAwardsPeriod=this.value; renderHallOfFame();" class="input-chip text-sm">
+            <select onchange="currentAwardsPeriod=this.value; renderHallOfFame();" class="input-chip text-sm">
               <option value="ytd" ${currentAwardsPeriod==='ytd'?'selected':''}>📈 YTD</option>
               <option value="q1" ${currentAwardsPeriod==='q1'?'selected':''}>Q1 (Wk 1–13)</option>
               <option value="q2" ${currentAwardsPeriod==='q2'?'selected':''}>Q2 (Wk 14–26)</option>
@@ -849,85 +743,7 @@ function parseDateSafe(val) {
     return d;
 }
 
-
-// ============================================================================
-// V32.1 UPGRADES: PERSISTENCE, ANCHORING & SNAPSHOTS
-// ============================================================================
-async function ensurePersistence() {
-  if (navigator.storage && navigator.storage.persist) {
-    const isPersisted = await navigator.storage.persist();
-    if(typeof __anchorMeta !== 'undefined') __anchorMeta.storagePersisted = isPersisted;
-    console.log(`[Persistence] Storage locked to disk: ${isPersisted}`);
-    return isPersisted;
-  }
-  return false;
-}
-
 async function loadDirectoryHandle() {
-  await ensurePersistence();
-  const settings = await idbGetAll('settings');
-  const savedHandle = settings.find(s => s.id === 'folder_handle');
-  
-  if (savedHandle && savedHandle.handle) {
-    try {
-      const status = await savedHandle.handle.requestPermission({ mode: 'readwrite' });
-      if (status === 'granted') {
-        directoryHandle = savedHandle.handle;
-        document.getElementById('folderStatus').innerText = `Status: Anchored to Shared Drive (${directoryHandle.name})`;
-        document.getElementById('folderStatus').classList.add('text-birds-green');
-        return true;
-      }
-    } catch (e) {
-      console.log("Shared folder link expired or moved.");
-    }
-  }
-  document.getElementById('folderStatus').innerText = "Status: Anchor Permission Lost / Re-select Folder";
-  return false;
-}
-
-async function selectAndAnchorFolder() {
-  try {
-    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    directoryHandle = handle;
-    await idbPut('settings', { id: 'folder_handle', handle: handle });
-    await ensurePersistence();
-    document.getElementById('folderStatus').innerText = `Status: Anchored to Shared Drive (${handle.name})`;
-    document.getElementById('folderStatus').classList.add('text-birds-green');
-    alert("Folder successfully anchored!");
-  } catch (err) {
-    console.error("Folder selection failed:", err);
-  }
-}
-
-async function createDataSnapshot() {
-  const kpis = await idbGetAll('kpi');
-  const audits = await idbGetAll('audits');
-  await idbPut('settings', { 
-    id: 'last_snapshot', 
-    data: { timestamp: new Date().toISOString(), kpis: kpis, audits: audits } 
-  });
-  console.log("[System] Data snapshot created before sync.");
-}
-
-async function restoreLastSnapshot() {
-  if(!confirm("Are you sure you want to rollback to the previous data state? This reverses the last refresh.")) return;
-  const settings = await idbGetAll('settings');
-  const snapRec = settings.find(s => s.id === 'last_snapshot');
-  
-  if (snapRec && snapRec.data) {
-    await idbClear('kpi');
-    await idbClear('audits');
-    for (const k of snapRec.data.kpis) await idbPut('kpi', k);
-    for (const a of snapRec.data.audits) await idbPut('audits', a);
-    alert("Successfully reverted to the previous data state.");
-    if(typeof renderDashboard === 'function') renderDashboard();
-  } else {
-    alert("No previous backup state found.");
-  }
-}
-// ============================================================================
-
-async function old_loadDirectoryHandle_Disabled() {
   try {
     // Check whether the browser is likely to evict IndexedDB/cache data
     try {
@@ -973,7 +789,7 @@ async function old_loadDirectoryHandle_Disabled() {
     const persistLine = (__anchorMeta.storagePersisted === true)
       ? ' • Storage: persistent'
       : (__anchorMeta.storagePersisted === false)
-        ? ' • Storage: Local (Desktop Mode)'
+        ? ' • Storage: not persistent'
         : '';
 
     if (statusEl) statusEl.innerText = 'Status: ' + lockLine + folderLabel + persistLine;
@@ -986,7 +802,7 @@ async function old_loadDirectoryHandle_Disabled() {
   }
 }
 
-async function old_selectAndAnchorFolder_Disabled() {
+async function selectAndAnchorFolder() {
   try {
     // Request persistent storage (best-effort) to reduce IndexedDB eviction
     try {
@@ -1016,7 +832,7 @@ async function old_selectAndAnchorFolder_Disabled() {
     const persistLine = (__anchorMeta.storagePersisted === true)
       ? ' • Storage: persistent'
       : (__anchorMeta.storagePersisted === false)
-        ? ' • Storage: Local (Desktop Mode)'
+        ? ' • Storage: not persistent'
         : '';
     if (statusEl) statusEl.innerText = 'Status: ✅ Locked (selected)' + folderLabel + persistLine;
 
@@ -1046,8 +862,7 @@ async function logIngest(entry){ const e = Object.assign({ts:Date.now()}, entry|
 function computeMissingWeeks(seenByYear){ const missing = {}; Object.keys(seenByYear||{}).forEach(y=>{ const set = seenByYear[y]; const arr = Array.from(set||[]).sort((a,b)=>a-b); const max = arr.length ? arr[arr.length-1] : 0; const miss = []; for(let w=1; w<=max; w++){ if(!set.has(w)) miss.push(w); } if(miss.length) missing[y]=miss; }); return missing; }
 function formatMissingBadge(m){ const years = Object.keys(m||{}); if(!years.length) return ''; return '⚠️ ' + years.map(y=>'Y'+y+': missing '+(m[y]||[]).length+'wk').join(' • '); }
 
-async function old_syncData_ForOverride() {
-    if (typeof createDataSnapshot === "function") await createDataSnapshot(); // V32.1 Patch
+async function syncData() {
   if (!directoryHandle) { alert("Please anchor a master folder first using 'Select Master Folder'."); return; }
   const hasPerm = await verifyPermission(directoryHandle, false);
   if(!hasPerm) { alert("Permission is needed to access the anchored folder. When prompted, choose Allow. If you no longer have access, use ‘Select Master Folder’ to re-anchor."); return; }
@@ -1229,7 +1044,11 @@ async function renderTrendsPanel() {
                     <option value="FilledRolls">Cold Rolls %</option>
                     <option value="Audit">Audit Score %</option>
                   </select>
- \n \<select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto"> \n \<option value="Network">Network Average</option> \n ${amOptions} \n \</select> \n<select id="trendStoreFilter" onchange="drawTrendChart(true)" class="input-chip text-sm p-2 w-full md:w-auto">
+                    <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
+                        <option value="Network">Network Average</option>
+                        ${amOptions}
+                    </select>
+                  <select id="trendStoreFilter" onchange="drawTrendChart(true)" class="input-chip text-sm p-2 w-full md:w-auto">
                       <option value="">🏢 Select a specific store...</option>
                       ${storeOptions}
                   </select>
@@ -1258,8 +1077,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if (storeFilterTriggered && storeFilter) {
       document.getElementById('trendScope').value = 'Network';
   }
-  const selectedAM = document.getElementById('trendScope')?.value || 'Network';
-const scope = selectedAM || 'Network';
+  const scope = document.getElementById('trendScope')?.value || 'Network';
   
   const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
   const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
@@ -1570,34 +1388,27 @@ async function renderDashboard(){
 
     const getCompScore = (k) => ((k.Sales||0)*100) + ((k.Product||0)*100) - ((k.Waste||0)*100) - ((k.Labour||0)*100) + (k.ATV||0) - ((k.Energy||0)/100);
 
-    const isClosedStore = (branch) => rawKpis.some(k => k.Branch === branch && k.IsAnomaly === true && k.Week === baseWeek);
-const activeStores = currLB.filter(r => !isClosedStore(r.Branch));
-const closedStores = currLB.filter(r => isClosedStore(r.Branch));
-const sortedActive = [...activeStores].sort((a,b)=> getCompScore(b) - getCompScore(a));
-const fullSorted = [...sortedActive, ...closedStores];
-const topStore = fullSorted[0]?.Branch; 
+    const currSorted = [...currLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
     const prevSorted = [...prevLB].sort((a,b)=> getCompScore(b) - getCompScore(a)); 
     const prevRank = new Map(prevSorted.map((r,i)=>[r.Branch, i+1]));
 
-    const selectedAM = document.getElementById('lbFilter')?.value || 'All';
-const rows = fullSorted
-.map((r,i)=> ({...r, rank: i+1}))
-.filter(r => selectedAM === 'All' || r.AM === selectedAM)
-.map(r=>{
-return `<tr class="border-b border-slate-100 text-[11px]">
-<td class="p-3 font-black">${r.rank}</td>
-<td class="p-3 font-bold ${(() => {const prev = prevRank.get(r.Branch); if (!prev) return 'text-slate-400'; const diff = prev - r.rank; if (diff > 0) return 'text-green-600'; if (diff < 0) return 'text-red-600'; return 'text-slate-400';})()}">${(() => {const prev = prevRank.get(r.Branch); if (!prev) return '—'; const diff = prev - r.rank; if (diff > 0) return '▲ ' + diff; if (diff < 0) return '▼ ' + Math.abs(diff); return '—';})()}</td>
-<td class="p-3 font-bold">${r.Branch} ${r.Branch===topStore?'🏆':''}${rawKpis.some(k => k.Branch===r.Branch && k.IsAnomaly && k.Week===baseWeek) ? '<span style=\"margin-left:6px;font-size:9px;font-weight:bold;background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:6px\">⛔ Closed / Excluded</span>' : ''}</td>
-<td class="p-3">${r.AM}</td>
-<td class="p-3">${rawKpis.some(k => k.Branch===r.Branch && k.IsAnomaly && k.Week===baseWeek) ? '—' : getCompScore(r).toFixed(1)}</td>
-<td class="p-3">${(r.Sales*100).toFixed(1)}%</td>
-<td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
-<td class="p-3">${(r.Energy).toFixed(0)}</td>
-</tr>`;
-}).join('');
+    const rows = currSorted.map((r,i)=>{
+      const nowRank = i+1; const wasRank = prevRank.get(r.Branch); let delta = '<span class="text-slate-300 font-black">—</span>';
+      if(wasRank && wasRank !== nowRank) { const diff = wasRank - nowRank; if(diff > 0) delta = `<span class="text-emerald-600 font-black">▲ ${diff}</span>`; else delta = `<span class="text-red-600 font-black">▼ ${Math.abs(diff)}</span>`; }
+      return `<tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50">
+        <td class="p-3 font-black">${nowRank}</td>
+        <td class="p-3">${delta}</td>
+        <td class="p-3 font-bold">${r.Branch}</td>
+        <td class="p-3 text-slate-500">${r.AM}</td>
+        <td class="p-3 font-black text-indigo-600">${getCompScore(r).toFixed(1)}</td>
+        <td class="p-3 font-bold birds-green">${(r.Sales*100).toFixed(1)}%</td>
+        <td class="p-3">${(r.Labour*100).toFixed(1)}%</td>
+        <td class="p-3">${(r.Energy).toFixed(0)} kWh</td>
+      </tr>`;
+    }).join('');
 
     document.getElementById('mainView').innerHTML = `
-      <div class='mb-2'><select id='lbFilter' onchange='renderDashboard()' class='input-chip'><option>All</option><option>Katie Cartwright</option><option>Craig White</option><option>Paul Reeves</option><option>Suzanne Green</option><option>Thomas Henson</option></select></div><div class="card overflow-x-auto relative max-h-[600px] overflow-y-auto shadow-inner border border-slate-200">
+      <div class="card overflow-x-auto relative max-h-[600px] overflow-y-auto shadow-inner border border-slate-200">
         <table class="w-full text-left relative">
           <thead class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-200">
             <tr>
@@ -1643,9 +1454,5 @@ function renderControlPanel() {
 
 function setView(v) { currentView = v; document.querySelectorAll('nav button').forEach(b => { b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap'; }); renderDashboard(); }
 </script>
-
-<script>
-</script>
-
 </body>
 </html>
