@@ -18,13 +18,525 @@
         });
       });
     }
-  </script>
+  
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+// ===== STORE SCORECARD ENGINE =====
+
+// --- NEW SUPPORTIVE SCORECARD ENGINE ---
+function generateSupportiveStoreCard(s, p) {
+    const getVal = (obj, keys) => {
+        if (!obj) return 0;
+        for (let k of keys) {
+            if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {
+                return (typeof obj[k] === 'number') ? obj[k] : (parseFloat(obj[k]) || 0);
+            }
+        }
+        return 0; 
+    };
+    
+    const weekNum = s.Week || window.currentWeek || 'Current';
+    const aRank = s.AreaRank || '-';
+    const cRank = s.CompanyRank || '-';
+
+    const metrics = [
+        { name: "Sales", val: getVal(s, ['Sales']), prev: getVal(p, ['Sales']), inverse: false, isRaw: false },
+        { name: "ATV", val: getVal(s, ['ATV']), prev: getVal(p, ['ATV']), inverse: false, isRaw: true, prefix: '£', format: (v) => v.toFixed(2) },
+        { name: "Waste", val: getVal(s, ['Waste']), prev: getVal(p, ['Waste']), inverse: true, isRaw: false },
+        { name: "Labour", val: getVal(s, ['Labour']), prev: getVal(p, ['Labour']), inverse: true, isRaw: false },
+        { name: "Energy", val: getVal(s, ['Energy']), prev: getVal(p, ['Energy']), inverse: true, isRaw: true, suffix: ' kWh', format: (v) => Math.round(v) },
+        { name: "Hot Drinks", val: getVal(s, ['HotBev']), prev: getVal(p, ['HotBev']), inverse: false, isRaw: false },
+        { name: "Hot Food", val: getVal(s, ['HotRolls']), prev: getVal(p, ['HotRolls']), inverse: false, isRaw: false },
+        { name: "Cold Rolls", val: getVal(s, ['FilledRolls']), prev: getVal(p, ['FilledRolls']), inverse: false, isRaw: false },
+        { name: "Sandwiches", val: getVal(s, ['Sandwiches']), prev: getVal(p, ['Sandwiches']), inverse: false, isRaw: false }
+    ];
+
+    metrics.forEach(m => {
+        if (m.isRaw) {
+            m.displayVal = (m.prefix || '') + (m.format ? m.format(m.val) : m.val) + (m.suffix || '');
+            m.variance = (m.prev !== 0 && m.prev !== undefined) ? (m.val - m.prev) / Math.abs(m.prev) : 0;
+        } else {
+            m.displayVal = (m.val * 100).toFixed(1) + '%';
+            m.variance = m.val - m.prev;
+        }
+        m.impact = m.inverse ? -m.variance : m.variance; 
+    });
+
+    const validMetrics = metrics.sort((a, b) => b.impact - a.impact);
+
+    // SUPPORTIVE COACHING LOGIC
+    let winning = validMetrics.filter(m => m.impact >= 0);
+    let negativeMetrics = validMetrics.filter(m => m.impact < 0);
+    
+    // Extract max 2 absolute worst metrics for "Focus", the rest become "Neutral" stats
+    let focus = negativeMetrics.slice(-2).reverse(); 
+    let neutral = negativeMetrics.slice(0, -2);
+
+    const formatDiff = (val) => {
+        if (val > 0) return `▲ +${(val * 100).toFixed(1)}%`;
+        if (val < 0) return `▼ ${Math.abs(val * 100).toFixed(1)}%`;
+        return `- 0.0%`;
+    };
+
+    const renderPill = (m, category) => {
+        let bgClass, trendCol;
+        if (category === 'win') {
+            bgClass = 'bg-emerald-50 text-emerald-900 border-emerald-200';
+            trendCol = 'text-emerald-700';
+        } else if (category === 'focus') {
+            bgClass = 'bg-amber-50 text-amber-900 border-amber-200';
+            trendCol = 'text-amber-700';
+        } else {
+            // Neutral style for metrics that are negative but not the core focus
+            bgClass = 'bg-slate-50 text-slate-700 border-slate-200 opacity-90';
+            trendCol = 'text-slate-500';
+        }
+        
+        return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border ${bgClass} shadow-sm gap-2">
+                <span class="text-sm md:text-base font-bold leading-tight">${m.name}</span>
+                <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto shrink-0 gap-2 sm:gap-0">
+                    <span class="text-sm opacity-80 font-medium mb-0.5">${m.displayVal}</span>
+                    <span class="text-base font-black ${trendCol}">${formatDiff(m.variance)}</span>
+                </div>
+            </div>
+        `;
+    };
+    
+    const renderRank = (title, current, prev) => {
+        if (!current || current === '-') return '';
+        let changeHtml = '<span class="text-slate-400 font-bold text-xs">-</span>';
+        if (prev && current !== '-' && prev !== '-') {
+            const diff = prev - current;
+            if (diff > 0) changeHtml = `<span class="text-emerald-600 font-bold text-xs">▲ +${diff}</span>`;
+            else if (diff < 0) changeHtml = `<span class="text-amber-600 font-bold text-xs">▼ ${Math.abs(diff)}</span>`;
+        }
+        return `
+        <div class="flex flex-col bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 min-w-[85px] items-center justify-center shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-500 mb-1 tracking-wide">${title}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-xl font-black text-slate-800">#${current}</span>
+                ${changeHtml}
+            </div>
+        </div>`;
+    };
+
+    const safeId = "card-" + s.Branch.replace(/[ 	]+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+
+    return `
+      <div id="${safeId}" class="bg-white p-8 rounded-2xl shadow-md flex flex-col gap-6 border border-slate-200 relative mt-4">
+        
+        <button onclick="exportToPNG('${safeId}', 'Scorecard_${s.Branch}')" class="export-btn absolute top-6 right-6 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg text-slate-600 transition-colors shadow-sm" title="Download as PNG">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        </button>
+
+        <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4 border-b border-slate-100 pb-6 pr-14">
+          <div class="flex flex-col gap-2.5">
+              <div class="flex items-center gap-3">
+                  <h2 class="font-black text-3xl text-slate-800 tracking-tight">${s.Branch}</h2>
+                  <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-md shadow-sm">Wk ${weekNum}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}</span>
+              </div>
+              <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
+                🏅 ${winning.length} Metrics Improved This Week!
+              </div>
+          </div>
+          <div class="flex gap-4">
+              ${renderRank('Area Rank', aRank, p?.AreaRank)}
+              ${renderRank('Network Rank', cRank, p?.CompanyRank)}
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-6">
+            <div>
+                <h3 class="text-sm uppercase tracking-widest font-black text-slate-400 mb-4 pl-1">📊 Weekly Highlights & Tracking</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${winning.map(m => renderPill(m, 'win')).join('')}
+                    ${neutral.map(m => renderPill(m, 'neutral')).join('')}
+                    ${(winning.length === 0 && neutral.length === 0) ? '<span class="text-sm text-slate-400 italic pl-1">No data available.</span>' : ''}
+                </div>
+            </div>
+
+            ${focus.length > 0 ? `
+            <div class="pt-2">
+                <h3 class="text-sm uppercase tracking-widest font-black text-amber-600 mb-4 pl-1">🧭 Core Focus Areas</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${focus.map(m => renderPill(m, 'focus')).join('')}
+                </div>
+            </div>
+            ` : `
+            <div class="bg-emerald-50 rounded-xl p-5 text-center border border-emerald-200 shadow-sm">
+                <span class="text-base font-bold text-emerald-700">🌟 Exceptional week! No negative trends to focus on.</span>
+            </div>
+            `}
+        </div>
+      </div>`;
+}
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+
+  <script src="https://cdn.tailwindcss.com">
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js">
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
 
   <script>
     async function exportVisibleViewAsZip(){
@@ -68,7 +580,67 @@
       a.download = `Birds_${currentView}_${currentTimeFilter}.zip`;
       a.click();
     }
-  </script>
+  
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@700;800&display=swap');
@@ -120,7 +692,36 @@
     .spark-down{ background: linear-gradient(90deg, rgba(220,38,38,.10), rgba(220,38,38,.40)); }
     .spark-flat{ background: linear-gradient(90deg, rgba(148,163,184,.12), rgba(148,163,184,.35)); }
   </style>
-</head>
+
+    <script>
+    function exportToPNG(elementId, filename) {
+        const el = document.getElementById(elementId);
+        if(!el) return;
+        
+        if (typeof html2canvas === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            script.onload = () => doExport(el, filename);
+            document.head.appendChild(script);
+        } else {
+            doExport(el, filename);
+        }
+    }
+
+    function doExport(el, filename) {
+        const btns = el.querySelectorAll('.export-btn');
+        btns.forEach(b => b.style.display = 'none');
+        
+        html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false }).then(canvas => {
+            btns.forEach(b => b.style.display = ''); 
+            const link = document.createElement('a');
+            link.download = filename + '.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+    </script>
+    </head>
 
 <body class="p-4 md:p-10">
   <div class="max-w-[1500px] mx-auto">
@@ -163,8 +764,14 @@
       <button onclick="setView('winners')" id="btn-winners" class="seg-btn flex-1 whitespace-nowrap">Winners Podium</button>
       <button onclick="setView('leaderboard')" id="btn-leaderboard" class="seg-btn flex-1 whitespace-nowrap">Network Leaderboard</button>
       <button onclick="setView('halloffame')" id="btn-halloffame" class="seg-btn flex-1 whitespace-nowrap">🏆 YTD Awards</button>
-      <button onclick="setView('control')" id="btn-control" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
-    </nav>
+      <button onclick="setView('control')" id="
+
+
+<button onclick="setView('control')" id="btn-control"" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
+    <button onclick="setView('storecards')" id="btn-storecards" class="seg-btn flex-1 whitespace-nowrap">
+🏪 Store Scorecards
+</button>
+</nav>
 
     <main id="mainView" class="space-y-6"></main>
   </div>
@@ -1140,6 +1747,14 @@ async function exportAllTrendsPNGs(){
 }
 
 async function renderDashboard(){
+  if(currentView === 'storecards') return renderStoreScorecards();
+  // PRIORITY FIX
+  
+  if(currentView === 'control') return renderControlPanel();
+  if(currentView === 'trends') return renderTrendsPanel();
+  if(currentView === 'halloffame') return renderHallOfFame();
+
+  
  if(currentView === 'control') return renderControlPanel();
  if(currentView === 'trends') return renderTrendsPanel();
  if(currentView === 'halloffame') return renderHallOfFame();
@@ -1453,6 +2068,146 @@ function renderControlPanel() {
 }
 
 function setView(v) { currentView = v; document.querySelectorAll('nav button').forEach(b => { b.className = (b.id === `btn-${v}`) ? 'seg-btn seg-btn-active flex-1 whitespace-nowrap' : 'seg-btn flex-1 whitespace-nowrap'; }); renderDashboard(); }
+
+
+// ===== STORE SCORECARD ENGINE =====
+
+function computeRankMap(arr, metric, ascending=false){
+  const safe = arr.filter(x => Number.isFinite(x[metric]));
+  const sorted = [...safe].sort((a,b)=> ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
+  return new Map(sorted.map((s,i)=>[s.Branch,i+1]));
+}
+
+function buildInsightTop3(store, rankMaps, prevRankMaps){
+  const metrics = [
+    {k:'Sales', asc:false},
+    {k:'Product', asc:false},
+    {k:'Waste', asc:true},
+    {k:'Labour', asc:true},
+    {k:'HotBev', asc:false}
+  ];
+
+  return metrics.map(m=>{
+    const r = rankMaps[m.k].get(store.Branch);
+    const pr = prevRankMaps[m.k]?.get(store.Branch);
+    const change = pr ? pr - r : 0;
+    return {name:m.k, rank:r, change};
+  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
+}
+
+function buildOpportunities(store, rankMaps){
+  return Object.keys(rankMaps)
+    .map(k=>({name:k, rank:rankMaps[k].get(store.Branch)}))
+    .sort((a,b)=>b.rank - a.rank)
+    .slice(0,2);
+}
+
+
+
+function row(name,val,prev,inverse=false){
+  const trend = getTrendStr(val, prev, inverse);
+  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
+}
+
+
+
+async function exportStoreCardsZip(){
+  const zip = new JSZip();
+  let i = 1;
+
+  for(const c of document.querySelectorAll('.area-card-export')){
+    const canvas = await html2canvas(c);
+    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
+    i++;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'store_scorecards.zip';
+  a.click();
+}
+
+</script>
+<script>
+function renderStoreScorecards(){
+  idbGetAll('kpi').then(raw => {
+
+    const wk = archiveWeekOverride || latestWkGlobal;
+
+    const curr = aggregateData(raw.filter(k => k.Week === wk));
+    const prev = aggregateData(raw.filter(k => k.Week === wk-1));
+    
+    // Dynamically calculate ranks using existing data
+    const currNetworkRank = computeRankMap(curr, 'Sales', false);
+    const prevNetworkRank = computeRankMap(prev, 'Sales', false);
+    
+    const areas = [...new Set(curr.map(x => x.AM))].sort();
+    const currAreaRanks = {};
+    const prevAreaRanks = {};
+    
+    areas.forEach(a => {
+        currAreaRanks[a] = computeRankMap(curr.filter(x => x.AM === a), 'Sales', false);
+        prevAreaRanks[a] = computeRankMap(prev.filter(x => x.AM === a), 'Sales', false);
+    });
+
+    curr.forEach(s => {
+        s.CompanyRank = currNetworkRank.get(s.Branch);
+        s.AreaRank = currAreaRanks[s.AM] ? currAreaRanks[s.AM].get(s.Branch) : '-';
+    });
+
+    const prevMap = new Map();
+    prev.forEach(p => {
+        p.CompanyRank = prevNetworkRank.get(p.Branch);
+        p.AreaRank = prevAreaRanks[p.AM] ? prevAreaRanks[p.AM].get(p.Branch) : '-';
+        prevMap.set(p.Branch, p);
+    });
+
+    const aSel = document.getElementById('areaFilter')?.value || 'ALL';
+    const search = (document.getElementById('storeSearch')?.value || '').toLowerCase();
+
+    let list = curr;
+    if(aSel !== 'ALL'){ list = list.filter(x => x.AM === aSel); }
+    if(search){ list = list.filter(x => x.Branch.toLowerCase().includes(search)); }
+
+    const cards = list.map(s => {
+      const p = prevMap.get(s.Branch);
+      return generateSupportiveStoreCard(s, p);
+    }).join("");
+
+    document.getElementById('mainView').innerHTML = `
+      <div class="flex justify-between items-center mb-6">
+      <h2 class="text-3xl font-black">Store Scorecards</h2>
+      <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        Export / Print
+      </button>
+    </div>
+
+      <div class="flex gap-4 mb-6">
+        <select id="areaFilter" class="input-chip text-base py-2"></select>
+        <input id="storeSearch" placeholder="Search store..." class="input-chip text-base py-2 flex-grow max-w-md">
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        ${cards}
+      </div>
+    `;
+
+    const sel = document.getElementById('areaFilter');
+    sel.innerHTML = '<option value="ALL">All Areas</option>' +
+      areas.map(a => '<option>'+a+'</option>').join('');
+
+    sel.value = aSel; 
+    sel.onchange = renderStoreScorecards;
+    
+    const searchInput = document.getElementById('storeSearch');
+    if (searchInput) {
+        searchInput.value = search;
+        searchInput.oninput = renderStoreScorecards;
+    }
+  });
+}
 </script>
 </body>
 </html>
