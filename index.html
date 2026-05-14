@@ -40,6 +40,8 @@ function generateSupportiveStoreCard(s, p) {
 
     const metrics = [
         { name: "Sales", val: getVal(s, ['Sales']), prev: getVal(p, ['Sales']), inverse: false, isRaw: false },
+        { name: "Product Target", val: getVal(s, ['Product']), prev: getVal(p, ['Product']), inverse: false, isRaw: false },
+
         { name: "ATV", val: getVal(s, ['ATV']), prev: getVal(p, ['ATV']), inverse: false, isRaw: true, prefix: '£', format: (v) => v.toFixed(2) },
         { name: "Waste", val: getVal(s, ['Waste']), prev: getVal(p, ['Waste']), inverse: true, isRaw: false },
         { name: "Labour", val: getVal(s, ['Labour']), prev: getVal(p, ['Labour']), inverse: true, isRaw: false },
@@ -80,7 +82,7 @@ function generateSupportiveStoreCard(s, p) {
     const renderPill = (m, category) => {
         let bgClass, trendCol;
         if (category === 'win') {
-            bgClass = 'bg-emerald-50 text-emerald-900 border-emerald-200';
+            bgClass = ' text-emerald-900 border-emerald-200';
             trendCol = 'text-emerald-700';
         } else if (category === 'focus') {
             bgClass = 'bg-amber-50 text-amber-900 border-amber-200';
@@ -138,7 +140,7 @@ function generateSupportiveStoreCard(s, p) {
               <div class="flex items-center gap-2">
                   <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}</span>
               </div>
-              <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
+              <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5  px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
                 🏅 ${winning.length} Metrics Improved This Week!
               </div>
           </div>
@@ -166,7 +168,7 @@ function generateSupportiveStoreCard(s, p) {
                 </div>
             </div>
             ` : `
-            <div class="bg-emerald-50 rounded-xl p-5 text-center border border-emerald-200 shadow-sm">
+            <div class=" rounded-xl p-5 text-center border border-emerald-200 shadow-sm">
                 <span class="text-base font-bold text-emerald-700">🌟 Exceptional week! No negative trends to focus on.</span>
             </div>
             `}
@@ -644,10 +646,10 @@ async function exportStoreCardsZip(){
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@700;800&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; color: #0f172a; }
+    body { font-family: 'Inter', sans-serif;  color: #0f172a; }
     .outfit { font-family: 'Outfit', sans-serif; }
     .birds-green { color: #00A88E; }
-    .bg-birds { background-color: #00A88E; }
+    .bg-birds {  }
     .card { background: white; border-radius: 1.25rem; border: 1px solid #E2E8F0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.03), 0 4px 6px -4px rgba(0,0,0,0.02); transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); }
     .landscape-container { display: flex; flex-direction: column; gap: 1.5rem; }
@@ -672,7 +674,7 @@ async function exportStoreCardsZip(){
     .kpi-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F1F5F9; }
     .kpi-row:last-child { border-bottom: none; }
     .export-btn { transition: all 0.2s ease; cursor: pointer; }
-    .export-btn:hover { background-color: #e2e8f0; transform: translateY(-1px); }
+    .export-btn:hover {  transform: translateY(-1px); }
     :root{ --bg: #FBFBF9; --panel: rgba(255,255,255,.86); --ink: #0f172a; --muted: #64748b; --brand: #00A88E; }
     body{ background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
     .header-glass{ background: var(--panel); backdrop-filter: blur(10px); border: 1px solid rgba(15,23,42,.06); box-shadow: 0 12px 40px rgba(15,23,42,.06); }
@@ -832,7 +834,7 @@ function updateActiveWeekBadge(effectiveWeek) {
         badge.className = "bg-indigo-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider";
         badge.innerText = "ROLLING 4 WEEKS (WK " + Math.max(1, (latestWkGlobal-3)) + "-" + latestWkGlobal + ")";
     } else {
-        badge.className = "bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider";
+        badge.className = " text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider";
         badge.innerText = "YEAR TO DATE";
     }
 }
@@ -1825,7 +1827,7 @@ async function renderDashboard(){
     const filterLabel = currentTimeFilter === 'latest' ? `Wk ${effectiveWeek}${archiveWeekOverride? ' (Archive)' : ''}` : currentTimeFilter === 'last4' ? 'Rolling 4 Weeks' : 'Year to Date';
     const areaRows = amStatsGlobal.map((am, i) => `
       <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-        <div class="flex items-center gap-3"><span class="w-6 h-6 rounded-full ${i===0?'bg-emerald-100 text-emerald-700': i===1?'bg-slate-100 text-slate-700': i===2?'bg-amber-100 text-amber-700':'bg-slate-50 text-slate-400'} flex items-center justify-center text-[10px] font-black">${i+1}</span><span class="font-bold text-sm">${am.am}</span></div>
+        <div class="flex items-center gap-3"><span class="w-6 h-6 rounded-full ${i===0?' text-emerald-700': i===1?'bg-slate-100 text-slate-700': i===2?'bg-amber-100 text-amber-700':'bg-slate-50 text-slate-400'} flex items-center justify-center text-[10px] font-black">${i+1}</span><span class="font-bold text-sm">${am.am}</span></div>
         <div class="text-right flex gap-4 text-xs font-bold">
           <span class="w-16 text-emerald-600">${(am.sAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Sales</span></span>
           <span class="w-16 text-indigo-600">${(am.lAvg*100).toFixed(1)}% <span class="text-[9px] text-slate-400 font-normal block">Labour</span></span>
@@ -1882,7 +1884,7 @@ async function renderDashboard(){
           </div>
           <div class="lg:col-span-1 card p-6"><h3 class="font-black outfit birds-green mb-4 text-sm uppercase">Network Area Standings</h3><div class="flex flex-col">${areaRows}</div></div>
         </div>
-        <div class="mt-6 card p-6 border-t-4 border-t-emerald-500 bg-emerald-50 flex flex-col md:flex-row items-center justify-between">
+        <div class="mt-6 card p-6 border-t-4 border-t-emerald-500  flex flex-col md:flex-row items-center justify-between">
            <div><h3 class="font-black outfit text-emerald-800 text-lg uppercase mb-1">Network Audit Score</h3><p class="text-xs text-emerald-600 font-bold">Overall network compliance & standards</p></div>
            <div class="flex items-center gap-4">${ringSVG(bAvgAudit)}</div>
         </div>
@@ -1894,7 +1896,95 @@ async function renderDashboard(){
       const stores = curr.filter(k => k.AM === am); if(!stores.length) return ''; const pStores = prev.filter(k => k.AM === am);
       const aItems = Array.from(auditMap.entries()).filter(([id, data]) => storeMap.get(id) === am).map(([id, data]) => data);
       const avgK = (f) => stores.reduce((a,b)=>a+(b[f]||0),0)/stores.length; const pAvgK = (f) => pStores.length ? pStores.reduce((a,b)=>a+(b[f]||0),0)/pStores.length : undefined;
-      let validAreaAudits = 0; const totalAreaAuditScore = stores.reduce((a,b) => { const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score; if(s) { validAreaAudits++; return a + s; } return a; }, 0); const aAvg = validAreaAudits > 0 ? totalAreaAuditScore / validAreaAudits : 0;
+
+    // --- SHOP-VERSION KPI ENGINE ---
+    const getAreaAvg = (storeArray, keywords, excludeKw = null) => {
+        if (!storeArray || storeArray.length === 0) return undefined;
+        let actualKey = null;
+        let keys = Object.keys(storeArray[0] || {});
+        
+        for (let k of keys) {
+            let l = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let matches = keywords.every(kw => l.includes(kw));
+            if (excludeKw && excludeKw.some(ex => l.includes(ex))) matches = false;
+            
+            if (matches && !l.includes('target') && !l.includes('diff') && !l.includes('var') && !l.includes('ly')) {
+                actualKey = k;
+                break;
+            }
+        }
+        if (!actualKey) return undefined;
+        
+        let total = 0, count = 0;
+        storeArray.forEach(s => {
+            let val = s[actualKey];
+            if (val !== undefined && val !== null && val !== '') {
+                let parsed = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                if (!isNaN(parsed) && parsed !== 0) { total += parsed; count++; }
+            }
+        });
+        return count > 0 ? total / count : undefined;
+    };
+
+    const kpiCats = [
+        { label: 'Hot Food', kw: ['hot', 'roll'], ex: ['bev', 'drink'] },
+        { label: 'Hot Drinks', kw: ['hot', 'bev'], ex: null },
+        { label: 'Cold Rolls', kw: ['filled', 'roll'], ex: ['hot'] },
+        { label: 'Sandwiches', kw: ['sandwich'], ex: null }
+    ];
+
+    // THE FIX: min-width: 100% physically prevents the browser from squashing it to the left
+    let extraKpisHtml = `
+    <div class="birds-kpi-panel block w-full mt-6 pt-5 border-t border-slate-200 clear-both" style="min-width: 100%;">
+        <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Category Variance</h4>
+        <div class="grid grid-cols-2 gap-3 w-full">
+    `;
+    
+    kpiCats.forEach(kpi => {
+        let currAvg = getAreaAvg(stores, kpi.kw, kpi.ex);
+        let prevAvg = getAreaAvg(typeof pStores !== 'undefined' ? pStores : [], kpi.kw, kpi.ex);
+        
+        let displayVal = '-';
+        let formattedDiff = '-';
+        let trendColor = 'text-slate-500';
+        let trendBg = 'bg-slate-100';
+        let trendArrow = '-';
+
+        if (currAvg !== undefined) {
+            let isPct = (currAvg > -2 && currAvg < 2 && currAvg !== 0);
+            displayVal = isPct ? (currAvg * 100).toFixed(1) + '%' : Math.round(currAvg).toString();
+            
+            if (prevAvg !== undefined) {
+                let diff = currAvg - prevAvg;
+                formattedDiff = isPct ? Math.abs(diff * 100).toFixed(1) + '%' : Math.abs(Math.round(diff)).toString();
+                if (diff > (isPct ? 0.001 : 1)) { 
+                    trendColor = 'text-emerald-700'; 
+                    trendBg = '';
+                    trendArrow = '▲'; 
+                }
+                else if (diff < -(isPct ? 0.001 : 1)) { 
+                    trendColor = 'text-rose-700'; 
+                    trendBg = 'bg-rose-50';
+                    trendArrow = '▼'; 
+                }
+            }
+        }
+        
+        extraKpisHtml += `
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col justify-between w-full">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">${kpi.label}</span>
+                <div class="flex items-center justify-between mt-3">
+                    <span class="text-xl font-black text-slate-800 leading-none">${displayVal}</span>
+                    <span class="${trendBg} ${trendColor} text-[11px] font-black px-2 py-1 rounded-md flex items-center gap-1">${trendArrow} ${formattedDiff}</span>
+                </div>
+            </div>
+        `;
+    });
+    extraKpisHtml += '</div></div>';
+    
+    window.areaKPIBlocks = window.areaKPIBlocks || [];
+    window.areaKPIBlocks.push(extraKpisHtml);
+    let validAreaAudits = 0; const totalAreaAuditScore = stores.reduce((a,b) => { const s = auditMap.get(b.Branch.trim().toLowerCase())?.Score; if(s) { validAreaAudits++; return a + s; } return a; }, 0); const aAvg = validAreaAudits > 0 ? totalAreaAuditScore / validAreaAudits : 0;
       const sFood = aItems.reduce((a,b)=>a+(b['Food']||0),0)/(aItems.length||1); const sFire = aItems.reduce((a,b)=>a+(b['Fire']||0),0)/(aItems.length||1); const sHandS = aItems.reduce((a,b)=>a+(b['HandS']||0),0)/(aItems.length||1); const sJourney = aItems.reduce((a,b)=>a+(b['Journey']||0),0)/(aItems.length||1); const sCoffee = aItems.reduce((a,b)=>a+(b['Coffee']||0),0)/(aItems.length||1); const sFocus = aItems.reduce((a,b)=>a+(b['Focus']||0),0)/(aItems.length||1);
       const progColor = (val) => val >= 95 ? 'progress-fill' : val >= 90 ? 'progress-fill-warn' : 'progress-fill-crit';
       const safeMin = (p, c, f) => ((p[f]===0||!p[f]?Infinity:p[f]) < (c[f]===0||!c[f]?Infinity:c[f])) ? p : c; const safeMax = (p, c, f) => ((p[f]===0||!p[f]?-Infinity:p[f]) > (c[f]===0||!c[f]?-Infinity:c[f])) ? p : c;
@@ -1906,12 +1996,12 @@ async function renderDashboard(){
       let badges = '';
       try{ if(globalMostImprovedWin && globalMostImprovedWin.Branch){ const miId = normaliseStoreId(globalMostImprovedWin.Branch); const miAM = storeMap.get(miId); if(miAM === am) badges += `<span class="bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🏅 MOST IMPROVED: ${globalMostImprovedWin.Branch}</span>`; } }catch(e){}
       if (am === overallWinner) badges += `<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded shadow-sm mr-1">👑 OVERALL CHAMPION</span>`;
-      if (am === bestSalesAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Sales</span>`;
-      if (am === bestProductAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Product</span>`;
+      if (am === bestSalesAM) badges += `<span class=" text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Sales</span>`;
+      if (am === bestProductAM) badges += `<span class=" text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Product</span>`;
       if (am === bestWasteAM) badges += `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Waste</span>`;
       if (am === bestLabourAM) badges += `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Labour</span>`;
       if (am === bestEnergyAM) badges += `<span class="bg-slate-50 text-slate-700 border border-slate-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st Energy</span>`;
-      if (am === bestATVAM) badges += `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
+      if (am === bestATVAM) badges += `<span class=" text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded mr-1">🥇 1st ATV</span>`;
       const cardId = `area-card-${am.replace(/\s+/g, '-')}`;
 
       return `
@@ -1929,7 +2019,7 @@ async function renderDashboard(){
                  <div><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
               </div>
               <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}"><div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div><div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div></div>
-              <h4 class="text-[11px] font-black muted uppercase mb-3 flex items-center gap-2"><div class="w-1 h-3 bg-emerald-500 rounded-full"></div> Area Top Performers</h4>
+              <h4 class="text-[11px] font-black muted uppercase mb-3 flex items-center gap-2"><div class="w-1 h-3  rounded-full"></div> Area Top Performers</h4>
               <div class="space-y-1 bg-white rounded-xl border border-slate-100 p-3 shadow-sm">
                 <div class="kpi-row py-1.5"><span class="text-sm">📈 <b>Sales Growth</b></span><span class="text-sm text-right font-medium"><b>${bestSales.Branch}</b> <span class="text-emerald-600 font-bold">(${bestSales.Sales>0?'+':''}${(bestSales.Sales*100).toFixed(1)}%)</span></span></div>
                 <div class="kpi-row py-1.5"><span class="text-sm">🎯 <b>Product Target</b></span><span class="text-sm text-right font-medium"><b>${bestProduct.Branch}</b> <span class="text-emerald-600 font-bold">(${bestProduct.Product>0?'+':''}${(bestProduct.Product*100).toFixed(1)}%)</span></span></div>
@@ -1940,7 +2030,7 @@ async function renderDashboard(){
               </div>
             </div>
             <div class="landscape-right">
-              <h4 class="text-[11px] font-black muted uppercase mb-4 flex items-center gap-2"><div class="w-1 h-3 bg-teal-500 rounded-full"></div> Operational Sectors (Area Avg: ${aAvg.toFixed(1)}%)</h4>
+              <h4 class="text-[11px] font-black muted uppercase mb-4 flex items-center gap-2"><div class="w-1 h-3  rounded-full"></div> Operational Sectors (Area Avg: ${aAvg.toFixed(1)}%)</h4>
               <div class="grid grid-cols-2 gap-x-6 gap-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Food Safety</span><span class="${sFood<90?'text-red-500':sFood<95?'text-amber-500':''}">${sFood.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sFood)}" style="width:${sFood}%"></div></div></div>
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Fire Safety</span><span class="${sFire<90?'text-red-500':sFire<95?'text-amber-500':''}">${sFire.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sFire)}" style="width:${sFire}%"></div></div></div>
@@ -1949,8 +2039,8 @@ async function renderDashboard(){
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Coffee Standard</span><span class="${sCoffee<90?'text-red-500':sCoffee<95?'text-amber-500':''}">${sCoffee.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sCoffee)}" style="width:${sCoffee}%"></div></div></div>
                 <div><div class="flex justify-between text-xs font-bold mb-1.5"><span>Birds Focus</span><span class="${sFocus<90?'text-red-500':sFocus<95?'text-amber-500':''}">${sFocus.toFixed(1)}%</span></div><div class="progress-bar h-2"><div class="${progColor(sFocus)}" style="width:${sFocus}%"></div></div></div>
               </div>
-              <div class="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3 relative group">
-                <div class="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center font-bold text-emerald-600 shrink-0">💡</div>
+              <div class="mt-8 p-4  rounded-xl border border-emerald-100 flex items-start gap-3 relative group">
+                <div class="h-8 w-8  rounded-lg flex items-center justify-center font-bold text-emerald-600 shrink-0">💡</div>
                 <div class="flex-1"><h5 contenteditable="true" class="text-xs font-black text-emerald-900 mb-1 outline-none border-b border-dashed border-emerald-200 focus:border-emerald-400 focus:bg-white pr-6 transition-all">Area Manager Note</h5><p contenteditable="true" class="text-[11px] text-emerald-800 leading-tight outline-none focus:bg-white focus:ring-1 focus:ring-emerald-300 p-1 rounded cursor-text italic transition-all">Current period performance shows <b>${am}</b> maintaining network-leading standards in operational compliance while driving top-tier commercial growth.</p></div>
                 <button onclick="this.parentElement.remove()" class="export-btn absolute -top-2 -right-2 bg-white border border-red-100 text-red-400 hover:text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-[12px] shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
               </div>
@@ -2058,7 +2148,7 @@ function renderControlPanel() {
                 <div class="flex flex-col gap-3">
                   <input type="text" id="newStoreName" placeholder="Enter Store Name..." class="border border-slate-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-birds-green outline-none w-full shadow-sm">
                   <select id="newStoreAM" class="border border-slate-200 p-2.5 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-birds-green outline-none w-full">${AM_LIST.map(a => `<option value="${a}">${a}</option>`).join('')}</select>
-                  <button onclick="addNewStore()" class="bg-birds hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button>
+                  <button onclick="addNewStore()" class="bg-birds hover: text-white px-4 py-2.5 rounded-xl font-bold shadow-md transition-all mt-2">➕ Add to System</button>
                 </div>
               </div>
             </div>
@@ -2209,5 +2299,52 @@ function renderStoreScorecards(){
   });
 }
 </script>
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+    const mainView = document.getElementById('mainView');
+    if (!mainView) return;
+    
+    new MutationObserver(() => {
+        if (!window.areaKPIBlocks || window.areaKPIBlocks.length === 0) return;
+        
+        const cards = mainView.querySelectorAll('.grid > div');
+        let blockIndex = 0;
+        
+        cards.forEach(card => {
+            if (blockIndex >= window.areaKPIBlocks.length) return;
+            card.querySelectorAll('.birds-kpi-panel').forEach(p => p.remove());
+            
+            const textBoxes = card.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]');
+            
+            if (textBoxes.length > 0) {
+                const box = textBoxes[textBoxes.length - 1];
+                let wrapper = box;
+                
+                // THE FIX: Find the shaded box, but DO NOT append to the column. 
+                // We simply step outside the shaded box to maintain the native width.
+                while(wrapper.parentElement && wrapper.parentElement !== card) {
+                    const classes = wrapper.parentElement.className || '';
+                    if (classes.includes('bg-') || classes.includes('p-') || classes.includes('rounded') || classes.includes('border') || wrapper.parentElement.tagName === 'FIELDSET') {
+                        wrapper = wrapper.parentElement;
+                    } else {
+                        break;
+                    }
+                }
+                
+                const container = document.createElement('div');
+                container.innerHTML = window.areaKPIBlocks[blockIndex];
+                
+                // Insert perfectly AFTER the shaded box wrapper so it stretches natively
+                wrapper.insertAdjacentElement('afterend', container.firstElementChild);
+                blockIndex++;
+            }
+        });
+        
+        window.areaKPIBlocks = [];
+    }).observe(mainView, { childList: true, subtree: true });
+});
+</script>
+
 </body>
 </html>
