@@ -234,7 +234,7 @@ async function exportStoreCardsZip(){
 
 </script>
 
-  <script src="https://cdn.tailwindcss.com">
+  <script src="https://cdn.tailwindcss.com"></script>
 
 // ===== STORE SCORECARD ENGINE =====
 
@@ -478,7 +478,7 @@ async function exportStoreCardsZip(){
 }
 
 </script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
 
 // ===== STORE SCORECARD ENGINE =====
 
@@ -645,7 +645,6 @@ async function exportStoreCardsZip(){
 </script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@700;800&display=swap');
     body { font-family: 'Inter', sans-serif;  color: #0f172a; }
     .outfit { font-family: 'Outfit', sans-serif; }
     .birds-green { color: #00A88E; }
@@ -761,19 +760,15 @@ async function exportStoreCardsZip(){
 
     <nav class="segmented flex flex-wrap items-center gap-1 mb-8">
       <button onclick="setView('overview')" id="btn-overview" class="seg-btn seg-btn-active flex-1 whitespace-nowrap">Business Overview</button>
-      <button onclick="setView('trends')" id="btn-trends" class="seg-btn flex-1 whitespace-nowrap">📈 Trends & Patterns</button>
+      <button onclick="setView('trends')" id="btn-trends" class="seg-btn flex-1 whitespace-nowrap">📈 Trends &amp; Patterns</button>
       <button onclick="setView('areas')" id="btn-areas" class="seg-btn flex-1 whitespace-nowrap">Area Weekly Report</button>
       <button onclick="setView('winners')" id="btn-winners" class="seg-btn flex-1 whitespace-nowrap">Winners Podium</button>
       <button onclick="setView('leaderboard')" id="btn-leaderboard" class="seg-btn flex-1 whitespace-nowrap">Network Leaderboard</button>
       <button onclick="setView('halloffame')" id="btn-halloffame" class="seg-btn flex-1 whitespace-nowrap">🏆 YTD Awards</button>
-      <button onclick="setView('control')" id="
-
-
-<button onclick="setView('control')" id="btn-control"" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
-    <button onclick="setView('storecards')" id="btn-storecards" class="seg-btn flex-1 whitespace-nowrap">
-🏪 Store Scorecards
-</button>
-</nav>
+      <button onclick="setView('control')" id="btn-control" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
+      <button onclick="setView('storecards')" id="btn-storecards" class="seg-btn flex-1 whitespace-nowrap">🏪 Store Scorecards</button>
+      <button onclick="setView('banding')" id="btn-banding" class="seg-btn flex-1 whitespace-nowrap">📊 Banding</button>
+    </nav>
 
     <main id="mainView" class="space-y-6"></main>
   </div>
@@ -944,7 +939,7 @@ async function validateAndCorrectData(weeksTouched){
     for (const rec of kpis) {
       if (Array.isArray(weeksTouched) && weeksTouched.length && !weeksTouched.includes(rec.Week)) continue;
       const fixed = { ...rec };
-      if (fixed.__rawSales === undefined) fixed.__rawSales = rec.Sales;
+      if (fixed.__rawSales === undefined) fixed.__rawSales = (rec.SalesActual !== undefined ? rec.SalesActual : rec.Sales);
       if (fixed.__rawProduct === undefined) fixed.__rawProduct = rec.Product;
       if (fixed.__rawWaste === undefined) fixed.__rawWaste = rec.Waste;
       if (fixed.__rawLabour === undefined) fixed.__rawLabour = rec.Labour;
@@ -1315,14 +1310,16 @@ function findCols(rows){
           let actS = headers.findIndex(x => x.includes('actualsales') || x === 'sales');
           if(actS !== -1 && headers[actS+1] && headers[actS+1].includes('difference')) idxS = actS + 1;
       }
-      let idxL = headers.findIndex(x => x.includes('wagesasa%') || x.includes('wagesas') || x.includes('labour%') || x.includes('wages%'));
+          // NEW: capture Actual Sales (£) column for size-based banding
+    let idxSA = headers.findIndex(x => String(x||'').includes('actualsales'));
+let idxL = headers.findIndex(x => x.includes('wagesasa%') || x.includes('wagesas') || x.includes('labour%') || x.includes('wages%'));
       const baseProduct = headers.findIndex(x => x.includes('producttarget'));
       const baseFR = headers.findIndex(x => x.includes('filledrollsactual') || x.includes('filledrolls'));
       const baseSW = headers.findIndex(x => x.includes('sandwichesactual') || x.includes('sandwiches'));
       const baseHR = headers.findIndex(x => x.includes('filledrollhotactual') || x.includes('filledrollhot'));
       const baseHB = headers.findIndex(x => x.includes('hotbeverageactual') || x.includes('hotbeverage'));
       return {
-        hr: hasSubHeader ? r + 1 : r, idxB: idxB, idxS: idxS,
+        hr: hasSubHeader ? r + 1 : r, idxB: idxB, idxS: idxS, idxSA: idxSA,
         idxP: baseProduct >= 0 ? baseProduct + 2 : -1,
         idxW: headers.findIndex(x => x.includes('waste%') || x.includes('wastage') || x === 'waste'), 
         idxL: idxL, idxA: headers.findIndex(x => x.includes('atv') && !x.includes('target')), 
@@ -1509,7 +1506,7 @@ async function syncData() {
             
             await idbPut('kpi', {
               Branch: rawBranch, Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
-              Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
+              Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, SalesActual: (cols.idxSA !== undefined && cols.idxSA >= 0) ? parseVal(r[cols.idxSA]) : 0, __rawSales: (cols.idxSA !== undefined && cols.idxSA >= 0) ? parseVal(r[cols.idxSA]) : undefined, Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
               ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
               FilledRolls: cols.idxFR >= 0 ? parseVal(r[cols.idxFR]) : 0, Sandwiches: cols.idxSW >= 0 ? parseVal(r[cols.idxSW]) : 0,
@@ -1755,11 +1752,13 @@ async function renderDashboard(){
   if(currentView === 'control') return renderControlPanel();
   if(currentView === 'trends') return renderTrendsPanel();
   if(currentView === 'halloffame') return renderHallOfFame();
+if(currentView === 'banding') return renderBandingView();
 
   
  if(currentView === 'control') return renderControlPanel();
  if(currentView === 'trends') return renderTrendsPanel();
  if(currentView === 'halloffame') return renderHallOfFame();
+if(currentView === 'banding') return renderBandingView();
 
   const rawKpis = await idbGetAll('kpi'); const allAudits = await idbGetAll('audits'); const allActions = await idbGetAll('actions');
   const combinedData = [...rawKpis, ...allAudits]; if(!combinedData.length && currentView !== 'control') return;
@@ -2346,5 +2345,352 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+
+<script>
+// ===============================
+// SALES SIZE BANDing View (A–D by £ Sales) — YTD Investment Score + Drop Risk
+// Band = purely store size (Actual Sales £, Year-to-Date). Score = how well the store controls/maximises the investment within its size band (YTD).
+// Drop Risk flags warn if recent turnover or operational control is materially below the store’s own YTD baseline.
+// ===============================
+function _fmtMoney(n){
+  const x = Number(n)||0;
+  try{ return '£' + Math.round(x).toLocaleString('en-GB'); }catch(e){ return '£' + Math.round(x); }
+}
+function _fmtPct(n, dp=1){
+  const x = Number(n);
+  if(!Number.isFinite(x)) return '—';
+  return (x*100).toFixed(dp) + '%';
+}
+function _safe(n){ n = Number(n); return Number.isFinite(n) ? n : 0; }
+function _median(arr){
+  const a = arr.filter(v=>Number.isFinite(v)).slice().sort((x,y)=>x-y);
+  if(!a.length) return 0;
+  const mid = Math.floor(a.length/2);
+  return a.length%2 ? a[mid] : (a[mid-1]+a[mid])/2;
+}
+function _mad(arr){
+  const med = _median(arr);
+  const dev = arr.map(v=>Math.abs(v-med));
+  return _median(dev) || 1;
+}
+function _zRobust(v, arr){
+  const med = _median(arr);
+  const mad = _mad(arr);
+  return (v - med) / mad;
+}
+function _bandLabel(i){
+  return i===0 ? 'Band A (Largest Stores)' : (i===1 ? 'Band B' : (i===2 ? 'Band C' : 'Band D (Smallest Stores)'));
+}
+function _ragFromScore(score){
+  const s = _safe(score);
+  if(s >= 75) return {label:'GREEN', cls:'text-emerald-700 bg-emerald-50 border-emerald-200', icon:'🟢'};
+  if(s >= 50) return {label:'AMBER', cls:'text-amber-700 bg-amber-50 border-amber-200', icon:'🟠'};
+  return {label:'RED', cls:'text-rose-700 bg-rose-50 border-rose-200', icon:'🔴'};
+}
+function _riskBadge(risk){
+  if(!risk) return '<span class="text-[10px] font-black text-slate-400">—</span>';
+  const cls = risk.level==='high' ? 'text-rose-700 bg-rose-50 border-rose-200'
+            : (risk.level==='med' ? 'text-amber-700 bg-amber-50 border-amber-200'
+            : 'text-slate-700 bg-slate-50 border-slate-200');
+  const icon = risk.level==='high' ? '⚠️' : (risk.level==='med' ? '👀' : 'ℹ️');
+  return `<span class="text-[10px] font-black ${cls} px-2 py-1 rounded-md border">${icon} ${risk.label}</span>`;
+}
+
+async function renderBandingView(){
+  const mv = document.getElementById('mainView');
+  if(!mv) return;
+
+  const rawKpisAll = await idbGetAll('kpi');
+  if(!rawKpisAll || rawKpisAll.length === 0){
+    mv.innerHTML = `
+      <div class="card p-10 text-center">
+        <h2 class="text-2xl font-black outfit birds-green mb-2">📊 Sales Banding (YTD)</h2>
+        <p class="text-slate-500 font-bold">No KPI data found yet.</p>
+        <p class="text-slate-400 text-sm mt-2">Click <b>🔄 Refresh Data</b> to ingest weekly files, then re-open this view.</p>
+      </div>`;
+    return;
+  }
+
+  // Effective year + latest week
+  const years = rawKpisAll.map(k=>k.Year).filter(y=>Number.isFinite(Number(y)));
+  const effectiveYear = years.length ? Math.max(...years.map(Number)) : (new Date().getFullYear());
+  const yearKpis = rawKpisAll.filter(k => (Number(k.Year)||effectiveYear) === effectiveYear);
+  const latestWeek = yearKpis.length ? Math.max(...yearKpis.map(k=>Number(k.Week)||0)) : 0;
+
+  const weekTo = latestWeek || 1;
+  const periodLabel = `Year to Date (Wk 1–${weekTo})`;
+
+  // Recent window used only for risk checks
+  const recentTo = weekTo;
+  const recentFrom = Math.max(1, recentTo - 3);
+
+  const filterRows = (fromW, toW) => yearKpis.filter(k => {
+    const w = Number(k.Week)||0;
+    if(!w) return false;
+    if(w < fromW || w > toW) return false;
+    if(k.IsAnomaly) return false;
+    if(k.AM === 'Unassigned') return false;
+    return true;
+  });
+
+  const ytdRows = filterRows(1, weekTo);
+  if(!ytdRows.length){
+    mv.innerHTML = `
+      <div class="card p-10 text-center">
+        <h2 class="text-2xl font-black outfit birds-green mb-2">📊 Sales Banding (YTD)</h2>
+        <p class="text-slate-500 font-bold">No usable KPI rows were found for ${periodLabel}.</p>
+      </div>`;
+    return;
+  }
+  const recentRows = filterRows(recentFrom, recentTo);
+
+  function buildStoreAgg(rows){
+    const byStore = new Map();
+    for(const k of rows){
+      const branch = k.Branch;
+      if(!branch) continue;
+      const id = String(branch).trim().toLowerCase();
+      if(!byStore.has(id)){
+        byStore.set(id, { Branch: branch, AM: k.AM, weeks: 0, salesTotal: 0, salesDiffSum: 0, productSum: 0, wasteSum: 0, labourSum: 0, atvSum: 0, energySum: 0 });
+      }
+      const s = byStore.get(id);
+      s.weeks += 1;
+
+      const actual = (k.__rawSales !== undefined && k.__rawSales !== null) ? Number(k.__rawSales)
+                   : (k.SalesActual !== undefined && k.SalesActual !== null) ? Number(k.SalesActual)
+                   : 0;
+      if(Number.isFinite(actual) && actual > 0) s.salesTotal += actual;
+
+      s.salesDiffSum += _safe(k.Sales);
+      s.productSum   += _safe(k.Product);
+      s.wasteSum     += _safe(k.Waste);
+      s.labourSum    += _safe(k.Labour);
+      s.atvSum       += _safe(k.ATV);
+      s.energySum    += _safe(k.Energy);
+    }
+
+    return Array.from(byStore.values()).map(s => {
+      const n = Math.max(1, s.weeks);
+      const salesTotal = _safe(s.salesTotal);
+      const energy = _safe(s.energySum) / n;
+      const energyPerSales = (salesTotal > 0) ? (energy / salesTotal) : 0;
+      return {
+        Branch: s.Branch,
+        AM: s.AM,
+        weeks: n,
+        SalesTotal: salesTotal,
+        AvgWeeklySales: salesTotal / n,
+        SalesDiff: s.salesDiffSum / n,
+        Product: s.productSum / n,
+        Waste: s.wasteSum / n,
+        Labour: s.labourSum / n,
+        ATV: s.atvSum / n,
+        Energy: energy,
+        EnergyPerSales: energyPerSales
+      };
+    });
+  }
+
+  let ytdStores = buildStoreAgg(ytdRows);
+  const volSum = ytdStores.reduce((a,b)=>a+_safe(b.SalesTotal),0);
+  if(!(volSum > 0)){
+    mv.innerHTML = `
+      <div class="card p-10 text-center">
+        <h2 class="text-2xl font-black outfit birds-green mb-2">📊 Sales Banding (YTD)</h2>
+        <p class="text-slate-500 font-bold">I can’t see any <b>Actual Sales (£)</b> values in your KPI records yet.</p>
+        <p class="text-slate-400 text-sm mt-2">Use this updated file, then click <b>🔄 Refresh Data</b> so the ingest captures <b>Actual Sales</b> from your weekly spreadsheets.</p>
+      </div>`;
+    return;
+  }
+
+  const recentStores = buildStoreAgg(recentRows);
+  const recentById = new Map(recentStores.map(s=>[String(s.Branch).trim().toLowerCase(), s]));
+
+  // Band purely by YTD £ Sales
+  ytdStores.sort((a,b)=> _safe(b.SalesTotal) - _safe(a.SalesTotal));
+  const nStores = ytdStores.length;
+  const q = Math.ceil(nStores / 4) || 1;
+  const bands = [
+    { name: _bandLabel(0), stores: ytdStores.slice(0, q) },
+    { name: _bandLabel(1), stores: ytdStores.slice(q, q*2) },
+    { name: _bandLabel(2), stores: ytdStores.slice(q*2, q*3) },
+    { name: _bandLabel(3), stores: ytdStores.slice(q*3) },
+  ].filter(b=>b.stores && b.stores.length);
+
+  // Efficiency score (YTD) within each band
+  function computeEfficiencyIndex(list){
+    const arrSalesDiff = list.map(s=>_safe(s.SalesDiff));
+    const arrProd      = list.map(s=>_safe(s.Product));
+    const arrWaste     = list.map(s=>_safe(s.Waste));
+    const arrLab       = list.map(s=>_safe(s.Labour));
+    const arrATV       = list.map(s=>_safe(s.ATV));
+    const arrEps       = list.map(s=>_safe(s.EnergyPerSales));
+    list.forEach(s => {
+      const zSales = _zRobust(_safe(s.SalesDiff), arrSalesDiff);
+      const zProd  = _zRobust(_safe(s.Product), arrProd);
+      const zATV   = _zRobust(_safe(s.ATV), arrATV);
+      const zWaste = -_zRobust(_safe(s.Waste), arrWaste);
+      const zLab   = -_zRobust(_safe(s.Labour), arrLab);
+      const zEps   = -_zRobust(_safe(s.EnergyPerSales), arrEps);
+      s.EfficiencyIndex = (zSales*0.25) + (zProd*0.20) + (zWaste*0.20) + (zLab*0.20) + (zEps*0.10) + (zATV*0.05);
+    });
+  }
+
+  bands.forEach(b => {
+    computeEfficiencyIndex(b.stores);
+    const sorted = [...b.stores].sort((x,y)=>_safe(y.EfficiencyIndex)-_safe(x.EfficiencyIndex));
+    const n = Math.max(1, sorted.length);
+    sorted.forEach((s, idx)=>{
+      s.BandRank = idx+1;
+      s.BandScore = (n===1)?100:Math.round((1-(idx/(n-1)))*100);
+      s.BandRAG = _ragFromScore(s.BandScore);
+    });
+    b._avgBandScore = sorted.reduce((a,s)=>a+_safe(s.BandScore),0)/n;
+  });
+
+  // Recent within-band score (for risk comparison)
+  function computeRecentScoreMap(bandStores){
+    const recentList = bandStores.map(s=>recentById.get(String(s.Branch).trim().toLowerCase())).filter(Boolean);
+    if(!recentList.length) return new Map();
+    computeEfficiencyIndex(recentList);
+    const sorted = [...recentList].sort((a,b)=>_safe(b.EfficiencyIndex)-_safe(a.EfficiencyIndex));
+    const n = Math.max(1, sorted.length);
+    const map = new Map();
+    sorted.forEach((s, idx)=>{
+      const score = (n===1)?100:Math.round((1-(idx/(n-1)))*100);
+      map.set(String(s.Branch).trim().toLowerCase(), score);
+    });
+    return map;
+  }
+
+  bands.forEach(b => {
+    const recentScoreMap = computeRecentScoreMap(b.stores);
+    b.stores.forEach(s => {
+      const rid = String(s.Branch).trim().toLowerCase();
+      const r = recentById.get(rid);
+
+      // Risk checks
+      let turnoverDrop = false;
+      if(r && _safe(s.AvgWeeklySales) > 0 && _safe(r.AvgWeeklySales) > 0){
+        const ratio = _safe(r.AvgWeeklySales) / _safe(s.AvgWeeklySales);
+        if(ratio < 0.85) turnoverDrop = true; // material drop vs YTD run-rate
+      }
+
+      let efficiencyDrop = false;
+      if(recentScoreMap.has(rid)){
+        const recentScore = recentScoreMap.get(rid);
+        s.RecentBandScore = recentScore;
+        if((_safe(recentScore) - _safe(s.BandScore)) <= -15) efficiencyDrop = true;
+      } else {
+        s.RecentBandScore = null;
+      }
+
+      let risk = null;
+      if(turnoverDrop && efficiencyDrop) risk = {level:'high', label:'Turnover & control drop'};
+      else if(turnoverDrop) risk = {level:'high', label:'Turnover drop vs YTD'};
+      else if(efficiencyDrop) risk = {level:'med', label:'Control drop vs YTD'};
+      s.Risk = risk;
+    });
+  });
+
+  const bandSummary = bands.map((band) => {
+    const vals = band.stores.map(s=>_safe(s.SalesTotal)).filter(v=>v>0);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const avgScore = _safe(band._avgBandScore);
+    const rag = _ragFromScore(avgScore);
+    return `
+      <div class="card p-4 border border-slate-200 flex flex-col gap-1">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${band.name}</div>
+        <div class="text-lg font-black text-slate-800">${_fmtMoney(min)} → ${_fmtMoney(max)}</div>
+        <div class="text-xs font-bold ${rag.cls} w-fit px-2 py-1 rounded-md border">${rag.icon} Avg Band Score: ${avgScore.toFixed(0)} • ${band.stores.length} stores</div>
+        <div class="text-[10px] text-slate-500 font-bold mt-1">Risk checks compare last 4 weeks (Wk ${recentFrom}–${recentTo}) vs YTD baseline</div>
+      </div>`;
+  }).join('');
+
+  const headerNote = `This view is <b>YTD-first</b>. Band = store size (Total Sales £ for ${periodLabel}). Band Score ranks <b>investment performance</b> within that size band using Labour, Waste, Energy/£, Sales vs Target, Product and ATV. Drop Risk highlights stores slipping vs their own YTD expectations.`;
+
+  const bandCards = bands.map((band, bi)=>{
+    const vals = band.stores.map(s=>_safe(s.SalesTotal)).filter(v=>v>0);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+
+    const rows = band.stores
+      .sort((a,b)=>_safe(a.BandRank)-_safe(b.BandRank))
+      .map((s)=>{
+        const rag = s.BandRAG || _ragFromScore(s.BandScore);
+        const recentScore = (s.RecentBandScore==null) ? '—' : (String(s.RecentBandScore) + '%');
+        return `
+          <tr class="border-b border-slate-100 text-[11px] hover:bg-slate-50">
+            <td class="p-3 font-black">${s.BandRank ?? '—'}</td>
+            <td class="p-3 font-bold">${s.Branch}</td>
+            <td class="p-3 text-slate-500">${s.AM || '—'}</td>
+            <td class="p-3 font-black text-indigo-700">${(s.BandScore ?? 0)}%</td>
+            <td class="p-3"><span class="text-[10px] font-black ${rag.cls} px-2 py-1 rounded-md border">${rag.icon} ${rag.label}</span></td>
+            <td class="p-3">${_riskBadge(s.Risk)}</td>
+            <td class="p-3 font-black text-emerald-700">${_fmtMoney(s.SalesTotal)}</td>
+            <td class="p-3 text-slate-600">${recentScore}</td>
+            <td class="p-3">${_fmtPct(s.SalesDiff)}</td>
+            <td class="p-3">${_fmtPct(s.Product)}</td>
+            <td class="p-3">${_fmtPct(s.Waste)}</td>
+            <td class="p-3">${_fmtPct(s.Labour)}</td>
+            <td class="p-3">${(s.EnergyPerSales>0)?(s.EnergyPerSales.toFixed(5)):'—'}</td>
+          </tr>`;
+      }).join('');
+
+    return `
+      <div class="card overflow-hidden border-t-4 ${bi===0?'border-t-amber-400':'border-t-birds-green'}">
+        <div class="p-5 flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+          <div>
+            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${band.name}</div>
+            <div class="text-xl font-black text-slate-800">${_fmtMoney(min)} → ${_fmtMoney(max)}</div>
+          </div>
+          <div class="text-xs text-slate-500 font-bold">Band Score = efficiency within size band (YTD, 0–100)</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="bg-slate-50 border-y border-slate-100">
+              <tr>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Band Rank</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Store</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Area</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">YTD Band Score</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">RAG</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Drop Risk</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">YTD Sales (£)</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Recent Score</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Sales vs Target</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Product</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Waste</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Labour</th>
+                <th class="p-3 text-[10px] uppercase text-slate-500 font-black">Energy/£</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+
+  mv.innerHTML = `
+    <div id="banding-card" class="pb-2 relative">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-black outfit birds-green uppercase tracking-tight">Sales Banding (A–D) — YTD Investment Score + Drop Risk</h2>
+        <div onclick="exportCard('banding-card', 'Sales_Banding_YTD')" class="export-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">📸 Export</div>
+      </div>
+
+      <div class="card p-5 mb-6 border border-slate-200">
+        <div class="text-sm text-slate-700 font-medium">${headerNote}</div>
+        <div class="text-xs text-slate-500 font-bold mt-2">This tab is designed for investment decisions (store size vs operational control), not week-on-week rankings.</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        ${bandSummary}
+      </div>
+
+      <div class="grid grid-cols-1 gap-6">${bandCards}</div>
+    </div>`;
+}
+</script>
 </body>
 </html>
