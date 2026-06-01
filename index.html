@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Birds Executive Hub - v32 Anomaly Protected</title>
+  <title>Birds Executive Hub v37 - v32 Anomaly Protected</title>
   <meta name="theme-color" content="#00A88E">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.png">
@@ -735,7 +735,7 @@ async function exportStoreCardsZip(){
           <div style="display:none;" class="w-full h-full bg-slate-50 items-center justify-center font-black text-birds-green text-xl rounded-full">B</div>
         </div>
         <div>
-          <h1 class="text-3xl font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub</h1>
+          <h1 class="text-3xl font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub v37</h1>
           <div class="flex items-center gap-2 mt-1">
             <span id="activeWeekBadge" class="bg-birds text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">LATEST DATA</span>
             <p id="folderStatus" class="text-slate-500 text-sm italic">Status: Not Anchored</p>
@@ -1506,7 +1506,26 @@ async function syncData() {
             let branchId = rawBranch.toLowerCase();
             
             await idbPut('kpi', {
-              Branch: rawBranch, Week: fileWk, Year: fileYr, AM: storeMap.get(branchId) || 'Unassigned',
+              Branch: rawBranch, Week: fileWk, Year: fileYr, AM: (() => {
+  try {
+    const AM_NAMES = ['Katie Cartwright','Craig White','Paul Reeves','Suzanne Green','Thomas Henson'];
+    let excelAM = null;
+
+    if (Array.isArray(r)) {
+      for (let i = 0; i < r.length; i++) {
+        let val = String(r[i] || '').trim();
+        if (AM_NAMES.includes(val)) {
+          excelAM = val;
+          break;
+        }
+      }
+    }
+
+    return excelAM || storeMap.get(branchId) || 'Unassigned';
+  } catch (e) {
+    return storeMap.get(branchId) || 'Unassigned';
+  }
+})(),
               Sales: cols.idxS >= 0 ? parseVal(r[cols.idxS]) : 0, SalesActual: (cols.idxSA !== undefined && cols.idxSA >= 0) ? parseVal(r[cols.idxSA]) : 0, __rawSales: (cols.idxSA !== undefined && cols.idxSA >= 0) ? parseVal(r[cols.idxSA]) : undefined, Product: cols.idxP >= 0 ? parseVal(r[cols.idxP]) : 0,
               Waste: cols.idxW >= 0 ? parseVal(r[cols.idxW]) : 0, Labour: cols.idxL >= 0 ? parseVal(r[cols.idxL]) : 0, 
               ATV: cols.idxA >= 0 ? parseVal(r[cols.idxA]) : 0, Energy: cols.idxE >= 0 ? parseVal(r[cols.idxE]) : 0,
