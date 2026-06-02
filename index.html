@@ -1042,13 +1042,13 @@ async function recordPersistentWinnersForWeeks(year, weeks){
 
   for(const week of weeks){
     // Exclude Anomaly weeks from ever winning an award
-    const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week && k.AM !== 'Unassigned' && !k.IsAnomaly);
+    const wkKpis = kpis.filter(k => (k.Year ?? year) === year && k.Week === week &&  !k.IsAnomaly);
     if(!wkKpis.length) continue;
 
     const pWk = week === 1 ? 52 : week - 1;
     const pYr = week === 1 ? year - 1 : year;
     // Exclude anomalies from previous baseline comparisons
-    const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk && k.AM !== 'Unassigned' && !k.IsAnomaly);
+    const prevKpis = kpis.filter(k => (k.Year ?? pYr) === pYr && k.Week === pWk &&  !k.IsAnomaly);
 
   try{
     const prevById = new Map(prevKpis.map(p=>[normaliseStoreId(p.Branch), p]));
@@ -1504,6 +1504,18 @@ async function syncData() {
             
             let rawBranch = cleanStoreName(r[cols.idxB]);
             let branchId = rawBranch.toLowerCase();
+// AUTO-REGISTER NEW STORES
+if (!storeMap.has(branchId)) {
+    const defaultAM = 'Unassigned';
+    await idbPut('stores', {
+        BranchId: branchId,
+        originalName: rawBranch,
+        AM: defaultAM
+    });
+    storeMap.set(branchId, defaultAM);
+    originalStoreNames.set(branchId, rawBranch);
+}
+
             
             await idbPut('kpi', {
               Branch: rawBranch, Week: fileWk, Year: fileYr, AM: (() => {
@@ -1626,7 +1638,7 @@ function aggregateData(dataArray) {
     const map = new Map();
     // THE NEW FILTER: Exclude anomalous weeks entirely from aggregations
     dataArray.filter(d => !d.IsAnomaly).forEach(d => {
-        const branchId = d.Branch.trim().toLowerCase(); const am = storeMap.get(branchId) || 'Unassigned'; if(am === 'Unassigned') return;
+        const branchId = d.Branch.trim().toLowerCase(); const am = storeMap.get(branchId) || 'Unassigned'; 
         if(!map.has(d.Branch)) map.set(d.Branch, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0, FilledRolls:0, Sandwiches:0, HotRolls:0, HotBev:0 });
         let obj = map.get(d.Branch); obj.count++; obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0; obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
     });
@@ -1713,14 +1725,14 @@ async function drawTrendChart(storeFilterTriggered = false) {
   let selAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   
   if(scope !== 'Network') selKpis = selKpis.filter(k => k.AM === scope);
-  if(scope === 'Network') selKpis = selKpis.filter(k => k.AM !== 'Unassigned');
+  if(scope === 'Network') selKpis = selKpis;
   if(scope !== 'Network'){ selAudits = selAudits.filter(a => { const branchId = String(a.Store).trim().toLowerCase(); return storeMap.get(branchId) === scope; }); }
   
   if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch)); 
   if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
   
   const showCompany = (scope !== 'Network') || !!storeFilterRaw;
-  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear && k.AM !== 'Unassigned' && !k.IsAnomaly); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
+  const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear &&  !k.IsAnomaly); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   const weekSet = new Set();
   (metric === 'Audit' ? selAudits.map(a=>a.Week) : selKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
   if(showCompany){ (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w)); }
@@ -2279,7 +2291,15 @@ function renderStoreScorecards(){
     if(aSel !== 'ALL'){ list = list.filter(x => x.AM === aSel); }
     if(search){ list = list.filter(x => x.Branch.toLowerCase().includes(search)); }
 
-    const cards = list.map(s => {
+    
+setTimeout(() => {
+    const select = document.getElementById('storeSelect');
+    if (!select) return;
+    const uniqueStores = [...new Set(curr.map(s => s.Branch))].sort();
+    select.innerHTML = uniqueStores.map(s => `<option value="${s}">${s}</option>`).join('');
+}, 100);
+
+const cards = list.map(s => {
       const p = prevMap.get(s.Branch);
       return generateSupportiveStoreCard(s, p);
     }).join("");
@@ -2449,7 +2469,7 @@ async function renderBandingView(){
     if(!w) return false;
     if(w < fromW || w > toW) return false;
     if(k.IsAnomaly) return false;
-    if(k.AM === 'Unassigned') return false;
+    
     return true;
   });
 
