@@ -1,127 +1,83 @@
-const CACHE_NAME = 'birds-hub-v33-cache';
-const OFFLINE_URL = './index.html'; // fallback shell
+const CACHE_NAME = 'birds-hub-v37-cache';
 
-const ASSETS_TO_CACHE = [
+// Core assets to pre-cache immediately on install
+const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png',
-
-  // Keep CDNs for now (we’ll make them more resilient)
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js'
+  './icon-512.png'
 ];
 
-
-// ✅ INSTALL (safe caching)
+// --- 1. INSTALL EVENT ---
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
-
+  // skipWaiting forces the waiting service worker to become active immediately.
+  // This prevents users from getting stuck on an old version of the app.
+  self.skipWaiting(); 
+  
   event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-
-      // Safe caching (won’t fail if one URL fails)
-      await Promise.allSettled(
-        ASSETS_TO_CACHE.map(url => cache.add(url))
-      );
-
-      console.log('[SW] Install complete');
-    })()
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[Service Worker] Pre-caching static assets');
+      return cache.addAll(STATIC_ASSETS);
+    })
   );
 });
 
-
-// ✅ ACTIVATE (clean old caches properly)
+// --- 2. ACTIVATE EVENT ---
 self.addEventListener('activate', (event) => {
+  // Clean up any old caches from previous versions
   event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-
-      await Promise.all(
-        keys.map(key => {
-          if (key !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', key);
-            return caches.delete(key);
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
           }
         })
       );
-
-      await self.clients.claim();
-    })()
+    }).then(() => self.clients.claim()) // Take control of all open pages immediately
   );
 });
 
-
-// ✅ FETCH (improved strategies)
+// --- 3. FETCH EVENT ---
 self.addEventListener('fetch', (event) => {
-
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
-  const req = event.request;
+  const requestUrl = new URL(event.request.url);
 
-  // ✅ Handle navigation (CRITICAL for offline app)
-  if (req.mode === 'navigate') {
+  // STRATEGY A: Cache First (falling back to network) for images/icons
+  if (requestUrl.pathname.match(/\.(png|jpe?g|svg|ico)$/)) {
     event.respondWith(
-      fetch(req)
-        .then(res => res)
-        .catch(() => caches.match('./index.html'))
+      caches.match(event.request).then((cachedResponse) => {
+        return cachedResponse || fetch(event.request).then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        });
+      })
     );
     return;
   }
 
-  // ✅ External (CDN) → cache-first (fail-safe)
-  if (req.url.startsWith('https://')) {
-    event.respondWith(cacheFirst(req));
-    return;
-  }
-
-  // ✅ Default → stale-while-revalidate
-  event.respondWith(staleWhileRevalidate(req));
+  // STRATEGY B: Network First (falling back to cache) for HTML, JS, and Data
+  // This is crucial for dashboards. It guarantees the user gets the latest parsing 
+  // logic and weekly data if they have an internet connection.
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        // If the network fetch is successful, clone the response and update the cache
+        return caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone());
+          return networkResponse;
+        });
+      })
+      .catch(() => {
+        // If the network fails (offline), fall back to the last cached version
+        console.log('[Service Worker] Network failed, serving from cache:', event.request.url);
+        return caches.match(event.request);
+      })
+  );
 });
-
-
-// ✅ STRATEGY: Cache First (for CDNs)
-async function cacheFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-
-  if (cached) return cached;
-
-  try {
-    const response = await fetch(request);
-    if (response.ok || response.type === 'opaque') {
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (err) {
-    console.log('[SW] CDN failed:', request.url);
-    return cached || Response.error();
-  }
-}
-
-
-// ✅ STRATEGY: Stale While Revalidate
-async function staleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-
-  const networkFetch = fetch(request)
-    .then(response => {
-      if (response && (response.ok || response.type === 'opaque')) {
-        cache.put(request, response.clone());
-      }
-      return response;
-    })
-    .catch(() => {
-      console.log('[SW] Network failed for:', request.url);
-      return cached;
-    });
-
-  return cached || networkFetch || caches.match(OFFLINE_URL);
-}
-``
