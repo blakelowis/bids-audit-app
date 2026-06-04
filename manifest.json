@@ -2,7 +2,7 @@
   "name": "Birds Executive Hub v37",
   "short_name": "Birds Hub",
   "description": "Store KPI Dashboard, Area Manager Allocations, and Deep Dive Scorecard Engine",
-  "start_url": "./index_v40_FORENSIC_DEEP_DIVE.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#00A88E",
