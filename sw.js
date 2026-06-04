@@ -1,83 +1,87 @@
-const CACHE_NAME = 'birds-hub-v37-cache';
+const CORE_CACHE = 'birds-hub-core-v37';
+const DYNAMIC_CACHE = 'birds-hub-dynamic-v37';
 
-// Core assets to pre-cache immediately on install
-const STATIC_ASSETS = [
+// Bare minimum required to boot the app offline initially.
+// We DO NOT put heavy CDNs here so we don't block the installation.
+const PRECACHE_URLS = [
   './',
-  './index.html',
+  './index_v40_FORENSIC_DEEP_DIVE.html',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './icon-192.png'
 ];
 
-// --- 1. INSTALL EVENT ---
 self.addEventListener('install', (event) => {
-  // skipWaiting forces the waiting service worker to become active immediately.
-  // This prevents users from getting stuck on an old version of the app.
-  self.skipWaiting(); 
-  
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-caching static assets');
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CORE_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .catch((err) => console.error('Core cache pre-load failed:', err))
   );
 });
 
-// --- 2. ACTIVATE EVENT ---
 self.addEventListener('activate', (event) => {
-  // Clean up any old caches from previous versions
+  // Clear out old caches when a new version of the service worker takes over
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
+        cacheNames.map((name) => {
+          if (name !== CORE_CACHE && name !== DYNAMIC_CACHE) {
+            return caches.delete(name);
           }
         })
       );
-    }).then(() => self.clients.claim()) // Take control of all open pages immediately
+    }).then(() => self.clients.claim())
   );
 });
 
-// --- 3. FETCH EVENT ---
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
-  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
 
-  const requestUrl = new URL(event.request.url);
+  // STRATEGY 1: CACHE FIRST (Lazy Loading for Heavy CDNs & Fonts)
+  // If we have it in cache, return it immediately. If not, fetch it, cache it, and return it.
+  const isCDN = [
+    'cdn.tailwindcss.com',
+    'cdnjs.cloudflare.com',
+    'cdn.jsdelivr.net',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com'
+  ].some(domain => url.origin.includes(domain));
 
-  // STRATEGY A: Cache First (falling back to network) for images/icons
-  if (requestUrl.pathname.match(/\.(png|jpe?g|svg|ico)$/)) {
+  if (isCDN) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        return cachedResponse || fetch(event.request).then((networkResponse) => {
-          return caches.open(CACHE_NAME).then((cache) => {
+        if (cachedResponse) {
+          return cachedResponse; // Instant load from Indexed Cache
+        }
+        return fetch(event.request).then((networkResponse) => {
+          // Clone the response because it's a stream and can only be consumed once
+          return caches.open(DYNAMIC_CACHE).then((cache) => {
             cache.put(event.request, networkResponse.clone());
             return networkResponse;
           });
-        });
+        }).catch((err) => console.warn('Offline and asset not dynamically cached yet:', event.request.url));
       })
     );
     return;
   }
 
-  // STRATEGY B: Network First (falling back to cache) for HTML, JS, and Data
-  // This is crucial for dashboards. It guarantees the user gets the latest parsing 
-  // logic and weekly data if they have an internet connection.
-  event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // If the network fetch is successful, clone the response and update the cache
-        return caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, networkResponse.clone());
-          return networkResponse;
-        });
-      })
-      .catch(() => {
-        // If the network fails (offline), fall back to the last cached version
-        console.log('[Service Worker] Network failed, serving from cache:', event.request.url);
-        return caches.match(event.request);
-      })
-  );
+  // STRATEGY 2: NETWORK FIRST (For HTML shell and local API/data calls)
+  // Always try to get the most up-to-date app/data first. Fallback to cache if offline.
+  if (event.request.method === 'GET') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Update the dynamic cache with the freshest version
+          const responseClone = response.clone();
+          caches.open(DYNAMIC_CACHE).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Network failed (offline), fetch the last known good state from cache
+          return caches.match(event.request);
+        })
+    );
+  }
 });
