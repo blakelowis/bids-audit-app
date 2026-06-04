@@ -986,6 +986,7 @@ async function validateAndCorrectData(weeksTouched){
 }
 
 // THE NEW ANOMALY DETECTION ENGINE
+// THE NEW, FORGIVING ANOMALY DETECTION ENGINE
 async function flagAnomalies() {
     try {
         const kpis = await idbGetAll('kpi');
@@ -1009,12 +1010,15 @@ async function flagAnomalies() {
                const curr = stores[i];
                let isAnomaly = false;
                
-               // Rule 1: Missing Data or Closed Store (-100% variance, explicit 0 sales, or 0% labour)
-               if (curr.Sales <= -0.90 || curr.__rawSales === 0 || curr.__rawSales === '0' || curr.Labour <= 0) {
+               // FIXED Rule 1: True closures only. 
+               // Removed the "Labour <= 0" check in case wage data was just missing from the sheet.
+               if (curr.Sales <= -0.90 || curr.__rawSales === 0 || curr.__rawSales === '0') {
                    isAnomaly = true;
                } 
-               // Rule 2: Sudden 30%+ drop from "normal" expectations
-               else if (lastValidSales !== null && Math.abs(curr.Sales - lastValidSales) >= 0.30) {
+               // FIXED Rule 2: Relaxed from 30% to 80% drop.
+               // This allows natural sales dips without wiping out the data, 
+               // but still catches a store that had to close for 5 out of 7 days.
+               else if (lastValidSales !== null && (lastValidSales - curr.Sales) >= 0.80) {
                    isAnomaly = true;
                }
 
@@ -2732,5 +2736,281 @@ async function renderBandingView(){
     </div>`;
 }
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+  #dossier-overlay { display: none; }
+  #dossier-overlay.active-dossier { display: block; }
+  .dossier-page-container {
+      width: 210mm;
+      min-height: 297mm;
+      background: white;
+      margin: 0 auto 20px auto;
+      padding: 15mm;
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      position: relative;
+  }
+</style>
+
+<div id="dossier-overlay" class="fixed inset-0 z-[9999] bg-slate-200 overflow-y-auto pt-4 pb-10">
+   <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-[10000] shadow-lg max-w-[210mm] mx-auto mt-4 rounded-xl">
+       <div class="flex items-center gap-4">
+           <h2 class="text-2xl font-black text-slate-800 tracking-tight">YTD Forensic Dossier</h2>
+           <select id="dossier-branch-select" class="bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-lg p-2.5 font-bold cursor-pointer">
+               <option value="">Select a Store...</option>
+           </select>
+       </div>
+       <div class="flex gap-3">
+           <button onclick="exportDossierPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-black shadow-md flex items-center gap-2">
+               📄 Export PDF Dossier
+           </button>
+           <button onclick="closeDossier()" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold">
+               Close
+           </button>
+       </div>
+   </div>
+   
+   <div id="dossier-content" class="mt-8 flex flex-col items-center">
+       <div class="h-64 flex items-center text-slate-500 font-bold text-lg bg-white px-10 py-5 rounded-xl shadow-sm">
+           Select a store from the dropdown to generate the 3-page report.
+       </div>
+   </div>
+</div>
+
+<button onclick="openDossier()" class="fixed bottom-6 right-6 bg-blue-700 text-white p-4 rounded-full shadow-2xl font-black z-[9000] hover:bg-blue-800 border-4 border-white transition-transform hover:scale-105 flex items-center gap-2">
+    <span class="text-xl">📑</span> YTD Dossier
+</button>
+
+<script>
+function openDossier() { document.getElementById('dossier-overlay').classList.add('active-dossier'); }
+function closeDossier() { document.getElementById('dossier-overlay').classList.remove('active-dossier'); }
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait 2 seconds to ensure IndexedDB is fully populated by your main app
+    setTimeout(async () => {
+        try {
+            const kpis = await idbGetAll('kpi'); 
+            if (!kpis || kpis.length === 0) return;
+            
+            const branches = [...new Set(kpis.map(k => k.Branch))].filter(Boolean).sort();
+            const select = document.getElementById('dossier-branch-select');
+            branches.forEach(b => {
+                select.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
+            });
+
+            select.addEventListener('change', (e) => {
+                if(e.target.value) renderDossier(e.target.value, kpis);
+            });
+        } catch(e) { console.log('Dossier dropdown error:', e); }
+    }, 2000);
+});
+
+function renderDossier(branch, kpis) {
+    const storeData = kpis.filter(k => k.Branch === branch).sort((a,b) => {
+        if((a.Year||0) !== (b.Year||0)) return (a.Year||0) - (b.Year||0);
+        return (a.Week||0) - (b.Week||0);
+    });
+    
+    if(!storeData.length) return;
+
+    const latest = storeData[storeData.length - 1];
+    const validData = storeData.filter(k => !k.IsAnomaly);
+    
+    const avg = (key) => (validData.reduce((acc, val) => acc + (val[key]||0), 0) / (validData.length || 1)).toFixed(2);
+    
+    // Build Page 3 Ledger Rows
+    const ledgerRows = storeData.map(k => `
+        <tr class="border-b border-slate-100 ${k.IsAnomaly ? 'bg-rose-50' : ''}">
+            <td class="p-2 text-center font-bold text-slate-700">${k.Week}</td>
+            <td class="p-2 font-medium ${k.Sales >= 0 ? 'text-emerald-600' : 'text-amber-600'}">${(k.Sales * 100).toFixed(1)}%</td>
+            <td class="p-2 font-medium text-slate-600">${(k.Labour * 100).toFixed(1)}%</td>
+            <td class="p-2 font-medium text-slate-600">${(k.Waste * 100).toFixed(1)}%</td>
+            <td class="p-2 text-xs font-bold text-slate-500">${k.AM || '-'}</td>
+            <td class="p-2 text-xs font-bold ${k.IsAnomaly ? 'text-rose-500' : 'text-emerald-500'}">${k.IsAnomaly ? 'FLAGGED ANOMALY' : 'VALID'}</td>
+        </tr>
+    `).join('');
+
+    const content = `
+    <div id="dossier-p1" class="dossier-page-container">
+        <div class="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
+            <div>
+                <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">Executive Health Dossier</div>
+                <h1 class="text-5xl font-black text-slate-900 tracking-tighter">${branch}</h1>
+            </div>
+            <div class="text-right text-sm font-bold text-slate-500 uppercase tracking-widest">
+                Wk ${latest.Week} / YR ${latest.Year}<br>Generated: ${new Date().toLocaleDateString()}
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 mb-10">
+            <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div class="text-xs uppercase font-black text-slate-400 mb-2 tracking-wider">Area Manager</div>
+                <div class="text-3xl font-black text-slate-800">${latest.AM || 'N/A'}</div>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 flex-1 text-center">
+                    <div class="text-xs uppercase font-black text-slate-400 mb-2">Network Rank</div>
+                    <div class="text-4xl font-black text-slate-800">#${latest.CompanyRank || '-'}</div>
+                </div>
+                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 flex-1 text-center">
+                    <div class="text-xs uppercase font-black text-slate-400 mb-2">Sales Band</div>
+                    <div class="text-4xl font-black text-slate-800">${latest.Banding || '-'}</div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">YTD Core Averages (Excluding Anomalies)</h3>
+        <div class="grid grid-cols-3 gap-6 mb-12">
+            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <div class="text-5xl font-black ${avg('Sales') >= 0 ? 'text-emerald-600' : 'text-amber-600'}">${(avg('Sales')*100).toFixed(1)}%</div>
+                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Sales Var</div>
+            </div>
+            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <div class="text-5xl font-black text-slate-700">${(avg('Labour')*100).toFixed(1)}%</div>
+                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Avg Labour</div>
+            </div>
+            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <div class="text-5xl font-black text-slate-700">${(avg('Waste')*100).toFixed(1)}%</div>
+                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Avg Waste</div>
+            </div>
+        </div>
+
+        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">Sales Progression Timeline</h3>
+        <div class="h-80 w-full bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <canvas id="dossier-chart-sales"></canvas>
+        </div>
+        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 1 | Executive Summary</div>
+    </div>
+
+    <div id="dossier-p2" class="dossier-page-container">
+        <div class="border-b-4 border-slate-900 pb-4 mb-8">
+            <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
+            <h2 class="text-3xl font-black text-slate-900 tracking-tighter">Efficiency & Anomalies</h2>
+        </div>
+
+        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">Labour vs Waste Expenditure Timeline</h3>
+        <div class="h-80 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 mb-12">
+            <canvas id="dossier-chart-ops"></canvas>
+        </div>
+
+        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">System Flagged Anomalies</h3>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 min-h-[200px]">
+            ${storeData.filter(k => k.IsAnomaly).map(k => `
+                <div class="flex items-start gap-4 mb-4 pb-4 border-b border-slate-200 last:border-0">
+                    <div class="bg-rose-100 text-rose-700 p-2 rounded-lg font-black text-xl">⚠️</div>
+                    <div>
+                        <div class="font-black text-slate-800 text-lg">Week ${k.Week} - Quarantined</div>
+                        <div class="text-sm font-medium text-slate-600 mt-1">
+                            Sales dropped by over 80% (Recorded: ${(k.Sales*100).toFixed(1)}%). 
+                            Engine flagged as temporary closure or corrupted file. Removed from YTD averages.
+                        </div>
+                    </div>
+                </div>
+            `).join('') || '<div class="text-center text-emerald-600 font-bold mt-10">✅ Data flow stable. No major anomalies or closures detected YTD.</div>'}
+        </div>
+        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 2 | Operations & Logs</div>
+    </div>
+
+    <div id="dossier-p3" class="dossier-page-container">
+        <div class="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
+            <div>
+                <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
+                <h2 class="text-3xl font-black text-slate-900 tracking-tighter">YTD Data Ledger</h2>
+            </div>
+        </div>
+
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-900 text-white text-xs uppercase tracking-wider">
+                    <th class="p-3 text-center rounded-tl-lg">Week</th>
+                    <th class="p-3">Sales Var</th>
+                    <th class="p-3">Labour</th>
+                    <th class="p-3">Waste</th>
+                    <th class="p-3">AM</th>
+                    <th class="p-3 rounded-tr-lg">System Status</th>
+                </tr>
+            </thead>
+            <tbody>${ledgerRows}</tbody>
+        </table>
+        
+        <div class="mt-8 text-xs text-slate-400 font-bold text-center uppercase tracking-widest">--- End of Report ---</div>
+        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 3 | Full Ledger</div>
+    </div>
+    `;
+
+    document.getElementById('dossier-content').innerHTML = content;
+
+    // Render Charts
+    const ctx1 = document.getElementById('dossier-chart-sales').getContext('2d');
+    if(window.dossierChart1) window.dossierChart1.destroy();
+    window.dossierChart1 = new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: storeData.map(d => 'Wk ' + d.Week),
+            datasets: [{ 
+                label: 'Sales Variance %', 
+                data: storeData.map(d => d.Sales * 100), 
+                borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderWidth: 3, tension: 0.3, fill: true
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    const ctx2 = document.getElementById('dossier-chart-ops').getContext('2d');
+    if(window.dossierChart2) window.dossierChart2.destroy();
+    window.dossierChart2 = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: storeData.map(d => 'Wk ' + d.Week),
+            datasets: [
+                { label: 'Labour %', data: storeData.map(d => d.Labour * 100), backgroundColor: '#10b981' },
+                { label: 'Waste %', data: storeData.map(d => d.Waste * 100), backgroundColor: '#f59e0b' }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+async function exportDossierPDF() {
+    const btn = document.querySelector('#dossier-overlay button[onclick="exportDossierPDF()"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Compiling PDF...';
+    btn.disabled = true;
+
+    try {
+        const branch = document.getElementById('dossier-branch-select').value;
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = pdf.internal.pageSize.getHeight();
+        
+        const pages = ['dossier-p1', 'dossier-p2', 'dossier-p3'];
+        
+        for (let i = 0; i < pages.length; i++) {
+            const el = document.getElementById(pages[i]);
+            if (!el) continue;
+            
+            if (i > 0) pdf.addPage();
+            
+            // html2canvas takes a snapshot of the container
+            const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+        }
+        
+        pdf.save(`Forensic_Dossier_${branch.replace(/\s+/g, '_')}.pdf`);
+    } catch(e) {
+        console.error('PDF Error:', e);
+        alert('Failed to generate PDF. Check console for details.');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+</script>
+
 </body>
 </html>
