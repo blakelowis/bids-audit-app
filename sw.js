@@ -5,7 +5,7 @@ const DYNAMIC_CACHE = 'birds-hub-dynamic-v37';
 // We DO NOT put heavy CDNs here so we don't block the installation.
 const PRECACHE_URLS = [
   './',
-  './index_v40_FORENSIC_DEEP_DIVE.html',
+  './index.html',
   './manifest.json',
   './icon-192.png'
 ];
