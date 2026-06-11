@@ -1,4 +1,4 @@
-const CACHE_NAME = 'birds-hub-v3'; // Bumped version to force update
+const CACHE_NAME = 'birds-hub-v4'; 
 
 const APP_ASSETS = [
   './',
@@ -15,14 +15,18 @@ const APP_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  // Fault-tolerant caching: Downloads one by one. A single 404 won't break the whole app.
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       for (let asset of APP_ASSETS) {
         try {
-          await cache.add(asset);
+          // THE FIX: Use 'no-cors' for external http links to bypass the security block
+          const request = new Request(asset, { 
+            mode: asset.startsWith('http') ? 'no-cors' : 'cors' 
+          });
+          const response = await fetch(request);
+          await cache.put(request, response);
         } catch (err) {
-          console.warn('Failed to cache asset (App will still work):', asset, err);
+          console.warn('Failed to cache asset:', asset, err);
         }
       }
     })
@@ -31,7 +35,6 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Cleans out the broken old cache
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -53,7 +56,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
 
-      // Crucial for GitHub Pages: If the browser asks for the root folder offline, hand it index.html
+      // Crucial for GitHub Pages routing
       if (event.request.mode === 'navigate') {
         return caches.match('./index.html').then(idx => {
           if (idx) return idx;
@@ -61,11 +64,8 @@ self.addEventListener('fetch', (event) => {
         });
       }
 
-      // Dynamic caching for Google Fonts and missing files
       return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || (networkResponse.type !== 'basic' && networkResponse.type !== 'cors')) {
-          return networkResponse;
-        }
+        // Automatically cache any other files (like Google Fonts) as they load
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
