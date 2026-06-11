@@ -1763,9 +1763,25 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(trendChartInstance) trendChartInstance.destroy();
   const isInverse = ['Waste','Labour','Energy'].includes(metric); const lineColor = isInverse ? '#F59E0B' : '#00A88E'; const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
   const labelScope = storeFilterRaw ? storeFilterRaw : scope;
-  const datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 3, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
+  let datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 3, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
   if(showCompany){ datasets.push({ label: 'Company Avg', data: companySeries, borderColor: 'rgba(59, 130, 246, 0.55)', backgroundColor: 'rgba(59, 130, 246, 0.00)', borderWidth: 2, borderDash: [6,6], pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.3, spanGaps: true }); }
-  trendChartInstance = new Chart(ctx, {
+  
+
+  // === ENSURE COMPANY AVG LINE ===
+  if(typeof companySeries !== 'undefined' && companySeries){
+    datasets.push({
+      label: 'Company Avg',
+      data: companySeries,
+      borderColor: 'rgba(59,130,246,0.85)',
+      borderDash: [6,6],
+      borderWidth: 2,
+      fill: false,
+      pointRadius: 0,
+      tension: 0.3
+    });
+  }
+
+trendChartInstance = new Chart(ctx, {
     type: 'line', data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
