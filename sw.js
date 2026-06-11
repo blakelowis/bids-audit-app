@@ -1,4 +1,4 @@
-const CACHE_NAME = 'birds-hub-v4'; 
+const CACHE_NAME = 'birds-hub-v5'; 
 
 const APP_ASSETS = [
   './',
@@ -11,7 +11,9 @@ const APP_ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js'
+  'https://cdn.jsdelivr.net/npm/chart.js',
+  // Added Google Fonts to force cache on install
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Outfit:wght@700;800&display=swap'
 ];
 
 self.addEventListener('install', (event) => {
@@ -19,7 +21,6 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then(async (cache) => {
       for (let asset of APP_ASSETS) {
         try {
-          // THE FIX: Use 'no-cors' for external http links to bypass the security block
           const request = new Request(asset, { 
             mode: asset.startsWith('http') ? 'no-cors' : 'cors' 
           });
@@ -56,7 +57,6 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
 
-      // Crucial for GitHub Pages routing
       if (event.request.mode === 'navigate') {
         return caches.match('./index.html').then(idx => {
           if (idx) return idx;
@@ -65,14 +65,14 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(event.request).then((networkResponse) => {
-        // Automatically cache any other files (like Google Fonts) as they load
+        // This catches the physical .woff2 font files dynamically
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
         });
         return networkResponse;
       }).catch(() => {
-        console.warn('User is offline, and asset is missing from cache:', event.request.url);
+        console.warn('User is offline, missing from cache:', event.request.url);
       });
     })
   );
