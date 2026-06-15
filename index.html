@@ -72,16 +72,16 @@ function canonicalStoreId(name){
   s = s.replace(/[^a-z0-9]/g,'');
 
   const STORE_MAP = {
-    derbioncrownwalk: ["derbioncrownwalk","crownwalk","derbioncw","crownwalkderbion"],
-    listergate: ["listergate","listerg"],
-    westbridgford: ["westbridgford","westbridgfo","westbridgeford"],
-    suttonlakeside: ["suttonlakeside","lakeside"],
-    victoriacentre: ["victoriacentre","victoriacenter","viccentre"],
-    longeaton: ["longeaton","longeton"],
-    parkfarm: ["parkfarm"],
-    eastleake: ["eastleake"],
-    meltonroad: ["meltonroad","meltonrd"],
-    tealpark: ["tealpark"]
+    "Derbion Crown Walk": ["derbioncrownwalk","crownwalk","derbioncw","crownwalkderbion"],
+    "Lister Gate": ["listergate","listerg"],
+    "West Bridgford": ["westbridgford","westbridgfo","westbridgeford"],
+    "Sutton Lakeside": ["suttonlakeside","lakeside"],
+    "Victoria Centre": ["victoriacentre","victoriacenter","viccentre"],
+    "Long Eaton": ["longeaton","longeton"],
+    "Park Farm": ["parkfarm"],
+    "East Leake": ["eastleake"],
+    "Melton Road": ["meltonroad","meltonrd"],
+    "Teal Park": ["tealpark"]
   };
 
   for(const key in STORE_MAP){
@@ -915,7 +915,8 @@ function cleanStoreName(name) {
     
     if (lower === 'crown walk') return 'Derbion Crown Walk';
     if (lower === 'sutton lakeside point') return 'Sutton Lakeside';
-    if (lower === 'listergate') return 'Lister Gate';
+    if (lower === 'lister gate') return 'Lister Gate';
+
     
     return s;
 }
