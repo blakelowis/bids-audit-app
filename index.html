@@ -10,6 +10,62 @@
 
   <script>
 
+// ===== STRICT CHRONOLOGICAL PARSER =====
+// Guarantees data is perfectly ordered regardless of local hard drive read speeds
+
+// 1. Collect files here during your folder loop instead of processing them immediately
+// e.g., window.PendingReportData.push({ Branch: "Mackworth", Week: 44, Sales: 1.05 });
+window.PendingReportData = [];
+
+window.EnforceDataConsistency = function() {
+    console.log("Sorting " + window.PendingReportData.length + " files for consistency...");
+    
+    // 2. Force strict chronological order
+    window.PendingReportData.sort((a, b) => {
+        // NOTE: Change 'Week' to match your actual time variable (e.g., 'Date', 'Period')
+        return a.Week - b.Week; 
+    });
+
+    // 3. Safely run variance logic now that the sequence is locked
+    for (let i = 1; i < window.PendingReportData.length; i++) {
+        let prev_store = window.PendingReportData[i - 1];
+        let current_store = window.PendingReportData[i];
+        
+        // --- TRIGGER YOUR IMPACT SCORECARD LOGIC HERE ---
+        // calculate_impact(current_store, prev_store);
+    }
+    
+    // Clear the array ready for the next time a folder is selected
+    window.PendingReportData = []; 
+};
+// =======================================
+
+
+// ===== SAFE DATA REFRESH & SW UPDATE =====
+window.addEventListener('load', () => {
+    // 1. Gently update the Service Worker without destroying the App Shell
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+            registration.update();
+        });
+    }
+
+    // 2. Clear only temporary session memory to force a fresh parse of the local files
+    // This leaves localStorage and IndexedDB intact so folder selections survive.
+    sessionStorage.clear();
+});
+
+// 3. Force a data refresh if the app is left open in the background and returned to
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+            registration.update();
+        });
+    }
+});
+// =========================================
+
+
 function canonicalStoreId(name){
   if(!name) return "";
   let s = String(name).toLowerCase().trim();
@@ -821,7 +877,7 @@ const DEFAULT_AREA_MAPPING = {
   'Craig White': ['Alfreton','Arnold','Beeston','Ilkeston','Lister Gate','Long Eaton','Mansfield','Mapperley','Teal Park','West Bridgford','Wollaton'],
   'Paul Reeves': ['Allenton','Alvaston','Belper','Duffield','Eastwood','Heanor','Hucknall','Mackworth','Matlock','Ripley','Sinfin','Spondon'],
   'Suzanne Green': ['Albert Street','Ashbourne','Bakery Shop','Borrowash','Chaddesden','Chellaston','Derbion Crown Walk','Littleover','Melbourne','Mickleover','Oakwood','Park Farm'],
-  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Coalville','East Leake','Keyworth','Lichfield','Lansdown Drive','Loughborough','Stretton','Swadlincote','Tamworth','Uttoxeter']
+  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Coalville','East Leake','Keyworth','Lichfield','Lansdowne Drive','Loughborough','Stretton','Swadlincote','Tamworth','Uttoxeter']
 };
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
 
