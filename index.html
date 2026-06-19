@@ -52,7 +52,7 @@ window.addEventListener('load', () => {
 
     // 2. Clear only temporary session memory to force a fresh parse of the local files
     // This leaves localStorage and IndexedDB intact so folder selections survive.
-    sessionStorage.clear();
+    // disabled unsafe session clear
 });
 
 // 3. Force a data refresh if the app is left open in the background and returned to
@@ -313,8 +313,8 @@ async function exportStoreCardsZip(){
 
 </script>
 
-  <script src="https://cdn.tailwindcss.com">
-
+  <script src="https://cdn.tailwindcss.com"></script>
+<script>
 // ===== STORE SCORECARD ENGINE =====
 
 
@@ -369,230 +369,14 @@ async function exportStoreCardsZip(){
 }
 
 </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-// ===== STORE SCORECARD ENGINE =====
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-function buildInsightTop3(store, rankMaps, prevRankMaps){
-  const metrics = [
-    {k:'Sales', asc:false},
-    {k:'Product', asc:false},
-    {k:'Waste', asc:true},
-    {k:'Labour', asc:true},
-    {k:'HotBev', asc:false}
-  ];
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  return metrics.map(m=>{
-    const r = rankMaps[m.k].get(canonicalStoreId(store.Branch));
-    const pr = prevRankMaps[m.k]?.get(canonicalStoreId(store.Branch));
-    const change = pr ? pr - r : 0;
-    return {name:m.k, rank:r, change};
-  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
-}
-
-function buildOpportunities(store, rankMaps){
-  return Object.keys(rankMaps)
-    .map(k=>({name:k, rank:rankMaps[k].get(canonicalStoreId(store.Branch))}))
-    .sort((a,b)=>b.rank - a.rank)
-    .slice(0,2);
-}
-
-
-
-function row(name,val,prev,inverse=false){
-  const trend = getTrendStr(val, prev, inverse);
-  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
-}
-
-
-
-async function exportStoreCardsZip(){
-  const zip = new JSZip();
-  let i = 1;
-
-  for(const c of document.querySelectorAll('.area-card-export')){
-    const canvas = await html2canvas(c);
-    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
-    i++;
-  }
-
-  const blob = await zip.generateAsync({type:'blob'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'store_scorecards.zip';
-  a.click();
-}
-
-</script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
-
-// ===== STORE SCORECARD ENGINE =====
-
-
-function buildInsightTop3(store, rankMaps, prevRankMaps){
-  const metrics = [
-    {k:'Sales', asc:false},
-    {k:'Product', asc:false},
-    {k:'Waste', asc:true},
-    {k:'Labour', asc:true},
-    {k:'HotBev', asc:false}
-  ];
-
-  return metrics.map(m=>{
-    const r = rankMaps[m.k].get(canonicalStoreId(store.Branch));
-    const pr = prevRankMaps[m.k]?.get(canonicalStoreId(store.Branch));
-    const change = pr ? pr - r : 0;
-    return {name:m.k, rank:r, change};
-  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
-}
-
-function buildOpportunities(store, rankMaps){
-  return Object.keys(rankMaps)
-    .map(k=>({name:k, rank:rankMaps[k].get(canonicalStoreId(store.Branch))}))
-    .sort((a,b)=>b.rank - a.rank)
-    .slice(0,2);
-}
-
-
-
-function row(name,val,prev,inverse=false){
-  const trend = getTrendStr(val, prev, inverse);
-  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
-}
-
-
-
-async function exportStoreCardsZip(){
-  const zip = new JSZip();
-  let i = 1;
-
-  for(const c of document.querySelectorAll('.area-card-export')){
-    const canvas = await html2canvas(c);
-    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
-    i++;
-  }
-
-  const blob = await zip.generateAsync({type:'blob'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'store_scorecards.zip';
-  a.click();
-}
-
-</script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
-
-// ===== STORE SCORECARD ENGINE =====
-
-
-function buildInsightTop3(store, rankMaps, prevRankMaps){
-  const metrics = [
-    {k:'Sales', asc:false},
-    {k:'Product', asc:false},
-    {k:'Waste', asc:true},
-    {k:'Labour', asc:true},
-    {k:'HotBev', asc:false}
-  ];
-
-  return metrics.map(m=>{
-    const r = rankMaps[m.k].get(canonicalStoreId(store.Branch));
-    const pr = prevRankMaps[m.k]?.get(canonicalStoreId(store.Branch));
-    const change = pr ? pr - r : 0;
-    return {name:m.k, rank:r, change};
-  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
-}
-
-function buildOpportunities(store, rankMaps){
-  return Object.keys(rankMaps)
-    .map(k=>({name:k, rank:rankMaps[k].get(canonicalStoreId(store.Branch))}))
-    .sort((a,b)=>b.rank - a.rank)
-    .slice(0,2);
-}
-
-
-
-function row(name,val,prev,inverse=false){
-  const trend = getTrendStr(val, prev, inverse);
-  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
-}
-
-
-
-async function exportStoreCardsZip(){
-  const zip = new JSZip();
-  let i = 1;
-
-  for(const c of document.querySelectorAll('.area-card-export')){
-    const canvas = await html2canvas(c);
-    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
-    i++;
-  }
-
-  const blob = await zip.generateAsync({type:'blob'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'store_scorecards.zip';
-  a.click();
-}
-
-</script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js">
-
-// ===== STORE SCORECARD ENGINE =====
-
-
-function buildInsightTop3(store, rankMaps, prevRankMaps){
-  const metrics = [
-    {k:'Sales', asc:false},
-    {k:'Product', asc:false},
-    {k:'Waste', asc:true},
-    {k:'Labour', asc:true},
-    {k:'HotBev', asc:false}
-  ];
-
-  return metrics.map(m=>{
-    const r = rankMaps[m.k].get(canonicalStoreId(store.Branch));
-    const pr = prevRankMaps[m.k]?.get(canonicalStoreId(store.Branch));
-    const change = pr ? pr - r : 0;
-    return {name:m.k, rank:r, change};
-  }).sort((a,b)=>a.rank - b.rank).slice(0,3);
-}
-
-function buildOpportunities(store, rankMaps){
-  return Object.keys(rankMaps)
-    .map(k=>({name:k, rank:rankMaps[k].get(canonicalStoreId(store.Branch))}))
-    .sort((a,b)=>b.rank - a.rank)
-    .slice(0,2);
-}
-
-
-
-function row(name,val,prev,inverse=false){
-  const trend = getTrendStr(val, prev, inverse);
-  return `<div class="kpi-row"><span>${name}</span><span>${(val*100).toFixed(1)}% ${trend}</span></div>`;
-}
-
-
-
-async function exportStoreCardsZip(){
-  const zip = new JSZip();
-  let i = 1;
-
-  for(const c of document.querySelectorAll('.area-card-export')){
-    const canvas = await html2canvas(c);
-    zip.file('store_'+i+'.png', canvas.toDataURL().split(',')[1], {base64:true});
-    i++;
-  }
-
-  const blob = await zip.generateAsync({type:'blob'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'store_scorecards.zip';
-  a.click();
-}
-
-</script>
 
   <script>
     async function exportVisibleViewAsZip(){
@@ -853,6 +637,8 @@ function calculateStoreScore(s){
         <button onclick="selectAndAnchorFolder()" class="btn-primary">📂 Select Master Folder</button>
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
+        <button onclick="exportFullStoreReport()" class="btn-secondary">📦 Full Store Report</button>
+        <button onclick="exportStorePDF()" class="btn-secondary" style="display:none;">PDF Report</button>
       </div>
     </header>
 
@@ -1287,10 +1073,21 @@ async function renderHallOfFame(){
 
       const storeStats = [];
       storeMap.forEach((am, branchId) => {
-           const origName = originalStoreNames.get(branchId) || branchId;
+           let origName = originalStoreNames.get(branchId);
+
+if (!origName) {
+  origName = branchId
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/bakeryshop/i, 'Bakery Shop')
+    .replace(/albertstreet/i, 'Albert Street')
+    .replace(/instreet/i, 'In Street')
+    .replace(/tealpark/i, 'Teal Park')
+    .replace(/meltonroad/i, 'Melton Road');
+}
            let w = 0; let breakdown = {};
            periodStores.forEach(l => {
-               if(l.Branch && String(l.Branch).trim().toLowerCase() === branchId){
+               const id = canonicalStoreId(l.Branch);
+               if(id === branchId){
                    w++; breakdown[l.Metric] = (breakdown[l.Metric] || 0) + 1;
                }
            });
@@ -1743,7 +1540,20 @@ async function renderTrendsPanel() {
     const weeksOptions = existingWeeks.map(w => `<option value="${w}" ${archiveWeekOverride == w ? 'selected':''}>Week ${w}</option>`).join('');
     const amOptions = validAMs.map(am => `<option value="${am}">${am}</option>`).join('');
     
-    const storeOptions = Array.from(new Set(Array.from(originalStoreNames.values())))
+    const storeOptions = Array.from(new Set(
+  Array.from(originalStoreNames.values()).map(n => {
+    let fixed = n
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([a-z])([A-Z])/g, '$1 $2');
+
+    fixed = fixed
+      .replace(/tealpark/i, 'Teal Park')
+      .replace(/meltonroad/i, 'Melton Road')
+      .replace(/bakeryshop/i, 'Bakery Shop');
+
+    return fixed;
+  })
+))
       .filter(Boolean)
       .sort((a,b)=>a.localeCompare(b))
       .map(n => `<option value="${n}">${n}</option>`)
@@ -2271,7 +2081,17 @@ if(currentView === 'banding') return renderBandingView();
 function renderControlPanel() {
     let rows = ''; const sortedStores = Array.from(storeMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
     sortedStores.forEach(([branchId, currentAM]) => {
-        const origName = originalStoreNames.get(branchId) || branchId; let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
+        let origName = originalStoreNames.get(branchId);
+
+if (!origName) {
+  origName = branchId
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/bakeryshop/i, 'Bakery Shop')
+    .replace(/albertstreet/i, 'Albert Street')
+    .replace(/instreet/i, 'In Street')
+    .replace(/tealpark/i, 'Teal Park')
+    .replace(/meltonroad/i, 'Melton Road');
+} let options = AM_LIST.map(am => `<option value="${am}" ${am === currentAM ? 'selected' : ''}>${am}</option>`).join('');
         rows += `<div class="flex justify-between items-center border-b border-slate-100 py-3 hover:bg-slate-50 transition-colors px-2 rounded"><span class="font-bold text-slate-800 text-sm w-1/2">${origName}</span><select onchange="updateStoreAM('${branchId}', this.value)" class="p-1.5 border border-slate-200 rounded-lg text-sm bg-white shadow-sm w-1/2 focus:ring-2 focus:ring-birds-green outline-none">${options}</select></div>`;
     });
     document.getElementById('mainView').innerHTML = `
@@ -2849,38 +2669,11 @@ async function renderBandingView(){
   }
 </style>
 
-<div id="dossier-overlay" class="fixed inset-0 z-[9999] bg-slate-200 overflow-y-auto pt-4 pb-10">
-   <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-[10000] shadow-lg max-w-[210mm] mx-auto mt-4 rounded-xl">
-       <div class="flex items-center gap-4">
-           <h2 class="text-2xl font-black text-slate-800 tracking-tight">YTD Forensic Dossier</h2>
-           <select id="dossier-branch-select" class="bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-lg p-2.5 font-bold cursor-pointer">
-               <option value="">Select a Store...</option>
-           </select>
-       </div>
-       <div class="flex gap-3">
-           <button onclick="exportDossierPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-black shadow-md flex items-center gap-2">
-               📄 Export PDF Dossier
-           </button>
-           <button onclick="closeDossier()" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold">
-               Close
-           </button>
-       </div>
-   </div>
-   
-   <div id="dossier-content" class="mt-8 flex flex-col items-center">
-       <div class="h-64 flex items-center text-slate-500 font-bold text-lg bg-white px-10 py-5 rounded-xl shadow-sm">
-           Select a store from the dropdown to generate the 3-page report.
-       </div>
-   </div>
-</div>
 
-<button onclick="openDossier()" class="fixed bottom-6 right-6 bg-blue-700 text-white p-4 rounded-full shadow-2xl font-black z-[9000] hover:bg-blue-800 border-4 border-white transition-transform hover:scale-105 flex items-center gap-2">
-    <span class="text-xl">📑</span> YTD Dossier
-</button>
 
 <script>
-function openDossier() { document.getElementById('dossier-overlay').classList.add('active-dossier'); }
-function closeDossier() { document.getElementById('dossier-overlay').classList.remove('active-dossier'); }
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
     // Wait 2 seconds to ensure IndexedDB is fully populated by your main app
@@ -2902,40 +2695,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
 });
 
-function renderDossier(branch, kpis) {
-    const storeData = kpis.filter(k => k.Branch === branch).sort((a,b) => {
-        if((a.Year||0) !== (b.Year||0)) return (a.Year||0) - (b.Year||0);
-        return (a.Week||0) - (b.Week||0);
-    });
-    
-    if(!storeData.length) return;
-
-    const latest = storeData[storeData.length - 1];
-    const validData = storeData.filter(k => !k.IsAnomaly);
-    
-    const avg = (key) => (validData.reduce((acc, val) => acc + (val[key]||0), 0) / (validData.length || 1)).toFixed(2);
-    
-    // Build Page 3 Ledger Rows
-    const ledgerRows = storeData.map(k => `
-        <tr class="border-b border-slate-100 ${k.IsAnomaly ? 'bg-rose-50' : ''}">
-            <td class="p-2 text-center font-bold text-slate-700">${k.Week}</td>
-            <td class="p-2 font-medium ${k.Sales >= 0 ? 'text-emerald-600' : 'text-amber-600'}">${(k.Sales * 100).toFixed(1)}%</td>
-            <td class="p-2 font-medium text-slate-600">${(k.Labour * 100).toFixed(1)}%</td>
-            <td class="p-2 font-medium text-slate-600">${(k.Waste * 100).toFixed(1)}%</td>
-            <td class="p-2 text-xs font-bold text-slate-500">${k.AM || '-'}</td>
-            <td class="p-2 text-xs font-bold ${k.IsAnomaly ? 'text-rose-500' : 'text-emerald-500'}">${k.IsAnomaly ? 'FLAGGED ANOMALY' : 'VALID'}</td>
-        </tr>
-    `).join('');
-
-    const content = `
-    <div id="dossier-p1" class="dossier-page-container">
-        <div class="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
-            <div>
-                <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">Executive Health Dossier</div>
-                <h1 class="text-5xl font-black text-slate-900 tracking-tighter">${branch}</h1>
-            </div>
-            <div class="text-right text-sm font-bold text-slate-500 uppercase tracking-widest">
-                Wk ${latest.Week} / YR ${latest.Year}<br>Generated: ${new Date().toLocaleDateString()}
             </div>
         </div>
 
@@ -3069,32 +2828,6 @@ function renderDossier(branch, kpis) {
     });
 }
 
-async function exportDossierPDF() {
-    const btn = document.querySelector('#dossier-overlay button[onclick="exportDossierPDF()"]');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Compiling PDF...';
-    btn.disabled = true;
-
-    try {
-        const branch = document.getElementById('dossier-branch-select').value;
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfW = pdf.internal.pageSize.getWidth();
-        const pdfH = pdf.internal.pageSize.getHeight();
-        
-        const pages = ['dossier-p1', 'dossier-p2', 'dossier-p3'];
-        
-        for (let i = 0; i < pages.length; i++) {
-            const el = document.getElementById(pages[i]);
-            if (!el) continue;
-            
-            if (i > 0) pdf.addPage();
-            
-            // html2canvas takes a snapshot of the container
-            const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-            const imgData = canvas.toDataURL('image/png');
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
-        }
         
         pdf.save(`Forensic_Dossier_${branch.replace(/\s+/g, '_')}.pdf`);
     } catch(e) {
@@ -3107,5 +2840,124 @@ async function exportDossierPDF() {
 }
 </script>
 
+
+<script>
+async function exportFullStoreReport(){
+  const storeName = prompt("Enter store name to export:");
+  if(!storeName) return;
+
+  const zip = new JSZip();
+  const wait = () => new Promise(r => setTimeout(r, 900));
+
+  function findStoreCard(){
+    let found = null;
+    document.querySelectorAll('[id^="card-"]').forEach(c=>{
+      const txt = c.innerText.toLowerCase();
+      if(txt.includes(storeName.toLowerCase())) found = c;
+    });
+    return found;
+  }
+
+  async function captureElement(name, el){
+    if(!el) return;
+    const canvas = await renderElementToCanvas(el, {forceWidth:1400});
+    zip.file(name, canvas.toDataURL().split(',')[1], {base64:true});
+  }
+
+  // Leaderboard
+  setView('leaderboard');
+  await wait();
+  function findLeaderboardRow(){
+  const targetId = canonicalStoreId(storeName);
+  let row = null;
+  document.querySelectorAll('#mainView tbody tr').forEach(r=>{
+    const txtId = canonicalStoreId(r.innerText);
+    if(txtId.includes(targetId)){
+      row = r;
+    }
+  });
+  return row;
+}
+
+const lbRow = findLeaderboardRow();
+if(lbRow){
+  await captureElement('01_Leaderboard_Row.png', lbRow);
+}
+  // Storecard
+  setView('storecards');
+  await wait();
+  const card = findStoreCard();
+  if(card){
+    await captureElement('02_Storecard.png', card);
+  }
+
+  // Banding
+  setView('banding');
+  await wait();
+  function findBandingRow(){
+  const targetId = canonicalStoreId(storeName);
+  let row = null;
+  document.querySelectorAll('#banding-card tbody tr').forEach(r=>{
+    const txtId = canonicalStoreId(r.innerText);
+    if(txtId.includes(targetId)){
+      row = r;
+    }
+  });
+  return row;
+}
+
+const bandRow = findBandingRow();
+if(bandRow){
+  await captureElement('03_Banding_Row.png', bandRow);
+}
+
+  // Medals
+  setView('halloffame');
+  await wait();
+  function findMedalRow(){
+  const targetId = canonicalStoreId(storeName);
+  let row = null;
+  document.querySelectorAll('#ytd-card tbody tr').forEach(r=>{
+    const txtId = canonicalStoreId(r.innerText);
+    if(txtId.includes(targetId)){
+      row = r;
+    }
+  });
+  return row;
+}
+
+const medalRow = findMedalRow();
+if(medalRow){
+  await captureElement('04_Medals_Row.png', medalRow);
+}
+
+
+  // Trends (all)
+  setView('trends');
+  await wait();
+
+  const metrics = ['Sales','Product','Waste','Labour','ATV','Energy','HotBev','HotRolls','FilledRolls','Audit'];
+  const metricSel = document.getElementById('trendMetric');
+
+  for(let m of metrics){
+    metricSel.value = m;
+    await drawTrendChart(true);
+    await new Promise(r=>setTimeout(r,200));
+
+    const canvas = document.getElementById('trendCanvas');
+    if(canvas){
+      zip.file(`Trend_${m}.png`, canvas.toDataURL().split(',')[1], {base64:true});
+    }
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Full_Report_'+storeName.replace(/\s+/g,'_')+'.zip';
+  a.click();
+}
+</script>
+
+<script>function exportStorePDF(){console.warn("PDF disabled");}</script>
 </body>
 </html>
