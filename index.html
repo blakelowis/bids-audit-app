@@ -1693,7 +1693,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch)); 
   if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
   
-  const showCompany = (scope !== 'Network') || !!storeFilterRaw;
+  const showCompany = true;
   const coKpis = rawKpis.filter(k => (k.Year ?? effectiveYear) === effectiveYear &&  !k.IsAnomaly); const coAudits = auditsAll.filter(a => (a.Year ?? effectiveYear) === effectiveYear);
   const weekSet = new Set();
   (metric === 'Audit' ? selAudits.map(a=>a.Week) : selKpis.map(k=>k.Week)).forEach(w => weekSet.add(w));
@@ -1717,20 +1717,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(showCompany){ datasets.push({ label: 'Company Avg', data: companySeries, borderColor: 'rgba(59, 130, 246, 0.55)', backgroundColor: 'rgba(59, 130, 246, 0.00)', borderWidth: 2, borderDash: [6,6], pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.3, spanGaps: true }); }
   
 
-  // === ENSURE COMPANY AVG LINE ===
-  if(typeof companySeries !== 'undefined' && companySeries){
-    datasets.push({
-      label: 'Company Avg',
-      data: companySeries,
-      borderColor: 'rgba(59,130,246,0.85)',
-      borderDash: [6,6],
-      borderWidth: 2,
-      fill: false,
-      pointRadius: 0,
-      tension: 0.3
-    });
-  }
-
+  
 trendChartInstance = new Chart(ctx, {
     type: 'line', data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
@@ -3018,8 +3005,7 @@ async function exportFullStoreReport() {
     if (storeDropdown) { storeDropdown.value = storeName; }
 
     const scopeDropdown = document.getElementById('trendScope');
-    if (scopeDropdown) { // dynamic AM detection
-    let correctAM = 'Network';
+    if (scopeDropdown) { let correctAM = 'Network';
     if (window.storeMap) {
         const id = canonicalStoreId(storeName);
         correctAM = storeMap.get(id) || 'Network';
