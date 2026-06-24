@@ -2981,7 +2981,79 @@ async function exportFullStoreReport() {
     const width = 277;  // ✅ full landscape width
     const height = width * ratio;
 
-    pdf.addImage(
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 22, width, height);
+  }
+
+  // =========================
+  // SWITCH TO PORTRAIT FOR REST
+  // =========================
+  pdf.addPage('p'); // ✅ switch orientation
+  let y = 18;
+
+  // =========================
+  // PAGE 2+ — TRENDS (CLEAN + AVG LINE FIXED)
+  // =========================
+  setView('trends');
+  await wait(900);
+
+  const metrics = [
+    'Sales','Product','Waste','Labour','ATV','Energy',
+    'HotBev','HotRolls','FilledRolls'
+  ];
+
+  for (let i = 0; i < metrics.length; i++) {
+
+    // ✅ 2 charts per page (clean layout)
+    if (i > 0 && i % 2 === 0) {
+      pdf.addPage('p');
+      y = 18;
+    }
+
+    const metricSel = document.getElementById('trendMetric');
+    if (metricSel) metricSel.value = metrics[i];
+
+    // redraw chart
+    // FORCE correct context for company comparison
+    const storeDropdown = document.getElementById('trendStoreFilter');
+    if (storeDropdown) { storeDropdown.value = storeName; }
+
+    const scopeDropdown = document.getElementById('trendScope');
+    if (scopeDropdown) { // dynamic AM detection
+    let correctAM = 'Network';
+    if (window.storeMap) {
+        const id = canonicalStoreId(storeName);
+        correctAM = storeMap.get(id) || 'Network';
+    }
+    scopeDropdown.value = correctAM; }
+
+    await drawTrendChart(false);
+    await nextFrame();
+    await wait(1200);
+
+    // ✅ FORCE FULL CHART RENDER (fix dotted avg line)
+    if (window.trendChartInstance) {
+      window.trendChartInstance.update('none');
+      window.trendChartInstance.render();
+    }
+
+    const baseCanvas = document.getElementById('trendCanvas');
+
+    if (baseCanvas) {
+      // patched: direct capture to preserve layers
+      
+
+      await new Promise(r => setTimeout(r, 200));
+      const dataURL = baseCanvas.toDataURL('image/png');
+
+      const ratio = baseCanvas.height / baseCanvas.width;
+
+      const width = 180;
+      const height = width * ratio;
+
+      pdf.setFontSize(10);
+      pdf.text(metrics[i] + ' Trend', 10, y);
+
+      pdf.addImage(
         dataURL,
         'PNG',
         10,
@@ -2990,30 +3062,7 @@ async function exportFullStoreReport() {
         height
       );
 
-      // === INSIGHT PATCH ===
-      try {
-        const latestStore = selectedSeries[selectedSeries.length - 1];
-        const latestCompany = companySeries ? companySeries[companySeries.length - 1] : null;
-
-        if (latestStore != null && latestCompany != null) {
-          const gap = (latestStore - latestCompany).toFixed(1);
-          pdf.setFontSize(9);
-          pdf.text(`Gap vs Company: ${gap > 0 ? '+' : ''}${gap}%`, 10, y + height + 6);
-        }
-
-        if (selectedSeries.length > 1) {
-          const last = selectedSeries[selectedSeries.length - 1];
-          const prev = selectedSeries[selectedSeries.length - 2];
-
-          let trend = '→ stable';
-          if (last > prev) trend = '↑ improving';
-          if (last < prev) trend = '↓ declining';
-
-          pdf.text(`Trend: ${trend}`, 100, y + height + 6);
-        }
-      } catch(e) {}
-
-      y += height + 14;
+      y += height + 10;
     }
   }
 
@@ -3058,7 +3107,6 @@ async function exportFullStoreReport() {
   let textY = 30 + height + 10;
   pdf.setFontSize(9);
   pdf.text('Weekly Medals:', 10, textY);
-  pdf.text(`Total Medals: ${storeWins.length}`, 120, textY);
   textY += 6;
 
   Object.entries(medalLines).forEach(([wk, medals]) => {
