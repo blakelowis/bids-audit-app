@@ -222,7 +222,8 @@ function generateSupportiveStoreCard(s, p) {
                   <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-md shadow-sm">Wk ${weekNum}</span>
               </div>
               <div class="flex items-center gap-2">
-                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}</span>
+                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}
+${(window.storeMedalsMap && window.storeMedalsMap[s.Branch]) ? `<div class="mt-2 flex flex-wrap gap-1">${window.storeMedalsMap[s.Branch].map(m=>{const isImp=m.includes('(Improvement)');return `<span class="text-[10px] font-black px-2 py-1 rounded-md border ${isImp?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-amber-50 text-amber-700 border-amber-200'}">${isImp?'📈':'🥇'} ${m.replace(' (Improvement)','')}</span>`}).join('')}</div>`:''}</span>
               </div>
               <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5  px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
                 🏅 ${winning.length} Metrics Improved This Week!
@@ -578,11 +579,27 @@ function resolveStoreAM(row, branchId){
   storeMap.set(branchId,excelAM);
   idbPut('stores',{BranchId:branchId,originalName:branchId,AM:excelAM});
  }
- return excelAM || storeMap.get(canonicalStoreId(branchId)) || 'Unassigned';
+ return excelAM || storeMap.get(branchId) || 'Unassigned';
 }
 </script>
 
 <script>
+
+// === MEDAL ENGINE V2 (TREND + PERFORMANCE) ===
+function calculateTrendWinner(currArr, prevArr, metric, inverse=false){
+  const prevMap = new Map(prevArr.map(p=>[canonicalStoreId(p.Branch),p]));
+  const deltas = currArr.map(c=>{
+    const p = prevMap.get(canonicalStoreId(c.Branch));
+    if(!p) return null;
+    const currVal = c[metric]||0;
+    const prevVal = p[metric]||0;
+    let change = inverse ? (prevVal - currVal) : (currVal - prevVal);
+    return {branch:c.Branch, change};
+  }).filter(Boolean);
+  deltas.sort((a,b)=>b.change-a.change);
+  return deltas[0];
+}
+
 function calculateStoreScore(s){
  return ((s.Sales||0)*100 + (s.Product||0)*100 - (s.Waste||0)*100 - (s.Labour||0)*100 - ((s.Energy||0)/100));
 }
@@ -595,6 +612,22 @@ function computeRankMap(arr, metric, ascending=false){
  const safe = arr.filter(x=>Number.isFinite(x[metric]));
  const sorted=[...safe].sort((a,b)=>ascending ? a[metric]-b[metric] : b[metric]-a[metric]);
  return new Map(sorted.map((s,i)=>[canonicalStoreId(s.Branch),i+1]));
+}
+
+
+// === MEDAL ENGINE V2 (TREND + PERFORMANCE) ===
+function calculateTrendWinner(currArr, prevArr, metric, inverse=false){
+  const prevMap = new Map(prevArr.map(p=>[canonicalStoreId(p.Branch),p]));
+  const deltas = currArr.map(c=>{
+    const p = prevMap.get(canonicalStoreId(c.Branch));
+    if(!p) return null;
+    const currVal = c[metric]||0;
+    const prevVal = p[metric]||0;
+    let change = inverse ? (prevVal - currVal) : (currVal - prevVal);
+    return {branch:c.Branch, change};
+  }).filter(Boolean);
+  deltas.sort((a,b)=>b.change-a.change);
+  return deltas[0];
 }
 
 function calculateStoreScore(s){
@@ -984,18 +1017,49 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     if(winner) { await idbPut('area_winners_log', { Year: year, Week: week, Winner: winner[0], Score: winner[1] }); }
 
     for(const am of validAMs){
-      const areaStores = wkKpis.filter(k => k.AM === am);
-      for(const m of metrics){
-        let validStores = areaStores;
-        if (m.order === 'asc') {
-            validStores = areaStores.filter(x => _finiteOr0(x[m.id]) > 0);
-        }
-        
-        if(!validStores.length) continue;
-        const sorted = [...validStores].sort((a,b)=> m.order==='desc' ? (_finiteOr0(b[m.id])-_finiteOr0(a[m.id])) : (_finiteOr0(a[m.id])-_finiteOr0(b[m.id])) );
-        if(sorted[0]) await idbPut('store_winners_log', { Year: year, Week: week, Metric: m.id, Branch: sorted[0].Branch });
-      }
+
+  const areaStores = wkKpis.filter(k => k.AM === am);
+  const prevStores = prevKpis.filter(k => k.AM === am);
+
+  for(const m of metrics){
+
+    let validStores = areaStores;
+    if (m.order === 'asc'){
+      validStores = areaStores.filter(x => _finiteOr0(x[m.id]) > 0);
     }
+
+    if(!validStores.length) continue;
+
+    // PERFORMANCE WINNER
+    const sorted = [...validStores].sort((a,b)=>
+      m.order==='desc'
+        ? (_finiteOr0(b[m.id])-_finiteOr0(a[m.id]))
+        : (_finiteOr0(a[m.id])-_finiteOr0(b[m.id]))
+    );
+
+    if(sorted[0]){
+      await idbPut('store_winners_log',{
+        Year: year,
+        Week: week,
+        Metric: m.id,
+        Branch: sorted[0].Branch
+      });
+    }
+
+    // TREND WINNER
+    const trendWinner = calculateTrendWinner(validStores, prevStores, m.id, m.order === 'asc');
+
+    if(trendWinner && trendWinner.change > 0){
+      await idbPut('store_winners_log',{
+        Year: year,
+        Week: week,
+        Metric: m.id + " (Improvement)",
+        Branch: trendWinner.branch
+      });
+    }
+
+  }
+}
   }
 }
 
@@ -1523,7 +1587,7 @@ function aggregateData(dataArray) {
     const map = new Map();
     // THE NEW FILTER: Exclude anomalous weeks entirely from aggregations
     dataArray.filter(d => !d.IsAnomaly).forEach(d => {
-        const branchId = canonicalStoreId(d.Branch); const am = storeMap.get(canonicalStoreId(branchId)) || 'Unassigned'; 
+        const branchId = canonicalStoreId(d.Branch); const am = storeMap.get(branchId) || 'Unassigned'; 
         if(!map.has(branchId)) map.set(branchId, { Branch: d.Branch, AM: am, count:0, Sales:0, Product:0, Waste:0, Labour:0, ATV:0, Energy:0, FilledRolls:0, Sandwiches:0, HotRolls:0, HotBev:0 });
         let obj = map.get(branchId); obj.count++; obj.Sales += d.Sales || 0; obj.Product += d.Product || 0; obj.Waste += d.Waste || 0; obj.Labour += d.Labour || 0; obj.ATV += d.ATV || 0; obj.Energy += d.Energy || 0; obj.FilledRolls += d.FilledRolls || 0; obj.Sandwiches += d.Sandwiches || 0; obj.HotRolls += d.HotRolls || 0; obj.HotBev += d.HotBev || 0;
     });
@@ -1615,7 +1679,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   }
   const scope = document.getElementById('trendScope')?.value || 'Network';
   
-  const storeMatch = (name) => { if(!storeFilter) return true; return String(name||'').trim().toLowerCase().includes(storeFilter); };
+  const storeMatch = (name) => { if(!storeFilter) return true; return canonicalStoreId(name).includes(canonicalStoreId(storeFilter)); };
   const allYears = [...rawKpis.map(k => k.Year), ...auditsAll.map(a => a.Year)].filter(y => y); const effectiveYear = allYears.length ? Math.max(...allYears) : new Date().getFullYear();
   
   // Trend chart filters out anomalies dynamically
@@ -1624,7 +1688,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   
   if(scope !== 'Network') selKpis = selKpis.filter(k => k.AM === scope);
   if(scope === 'Network') selKpis = selKpis;
-  if(scope !== 'Network'){ selAudits = selAudits.filter(a => { const branchId = String(a.Store).trim().toLowerCase(); return storeMap.get(canonicalStoreId(branchId)) === scope; }); }
+  if(scope !== 'Network'){ selAudits = selAudits.filter(a => { const branchId = String(a.Store).trim().toLowerCase(); return storeMap.get(branchId) === scope; }); }
   
   if(storeFilter) selKpis = selKpis.filter(k => storeMatch(k.Branch)); 
   if(storeFilter) selAudits = selAudits.filter(a => storeMatch(a.Store));
@@ -1712,6 +1776,14 @@ if(currentView === 'banding') return renderBandingView();
   latestWkGlobal = combinedData.length ? Math.max(...combinedData.filter(k => (k.Year || effectiveYear) === effectiveYear).map(k => k.Week)) : 0;
   let effectiveWeek = (archiveWeekOverride && Number.isFinite(archiveWeekOverride)) ? archiveWeekOverride : latestWkGlobal;
   updateActiveWeekBadge(effectiveWeek);
+  // BUILD STORE MEDALS MAP (v41)
+  const winners = await idbGetAll('store_winners_log');
+  window.storeMedalsMap = {}; window.__areaWinsCache = winners;
+  winners.filter(w => w.Week === effectiveWeek).forEach(w=>{
+    if(!window.storeMedalsMap[w.Branch]) window.storeMedalsMap[w.Branch]=[];
+    window.storeMedalsMap[w.Branch].push(w.Metric);
+  });
+
 
   let globalMostImprovedWin = null;
   try{ const wins = await idbGetAll('store_winners_log'); globalMostImprovedWin = wins.find(w => w && w.Metric === 'Most Improved' && w.Week === effectiveWeek && (w.Year || effectiveYear) === effectiveYear) || null; }catch(e){}
@@ -1731,7 +1803,7 @@ if(currentView === 'banding') return renderBandingView();
   }
   
   const aggAudits = new Map();
-  currAudits.forEach(a => { const id = a.Store.trim().toLowerCase(); if(!aggAudits.has(id)) aggAudits.set(id, {Store: a.Store, count:0, Score:0, Food:0, Fire:0, HandS:0, Journey:0, Coffee:0, Focus:0}); const obj = aggAudits.get(id); obj.count++; obj.Score += a.Score||0; obj.Food += a.Food||0; obj.Fire += a.Fire||0; obj.HandS += a.HandS||0; obj.Journey += a.Journey||0; obj.Coffee += a.Coffee||0; obj.Focus += a.Focus||0; });
+  currAudits.forEach(a => { const id = canonicalStoreId(a.Store); if(!aggAudits.has(id)) aggAudits.set(id, {Store: a.Store, count:0, Score:0, Food:0, Fire:0, HandS:0, Journey:0, Coffee:0, Focus:0}); const obj = aggAudits.get(id); obj.count++; obj.Score += a.Score||0; obj.Food += a.Food||0; obj.Fire += a.Fire||0; obj.HandS += a.HandS||0; obj.Journey += a.Journey||0; obj.Coffee += a.Coffee||0; obj.Focus += a.Focus||0; });
   const auditMap = new Map(); aggAudits.forEach((v, k) => auditMap.set(k, { Score: v.Score/v.count, Food: v.Food/v.count, Fire: v.Fire/v.count, HandS: v.HandS/v.count, Journey: v.Journey/v.count, Coffee: v.Coffee/v.count, Focus: v.Focus/v.count }));
 
   const bAvgSales = curr.reduce((a,b)=>a+(b.Sales||0),0) / (curr.length || 1); const pbAvgSales = prev.reduce((a,b)=>a+(b.Sales||0),0) / (prev.length || 1);
@@ -1881,7 +1953,12 @@ if(currentView === 'banding') return renderBandingView();
     // THE FIX: min-width: 100% physically prevents the browser from squashing it to the left
     let extraKpisHtml = `
     <div class="birds-kpi-panel block w-full mt-6 pt-5 border-t border-slate-200 clear-both" style="min-width: 100%;">
-        <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Category Variance</h4>
+        <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Category Variance
+
+<div class="mt-4 border-t pt-4"></div>
+
+
+</h4>
         <div class="grid grid-cols-2 gap-3 w-full">
     `;
     
@@ -1964,15 +2041,32 @@ if(currentView === 'banding') return renderBandingView();
                  <div><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
               </div>
               <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}"><div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div><div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div></div>
-              <h4 class="text-[11px] font-black muted uppercase mb-3 flex items-center gap-2"><div class="w-1 h-3  rounded-full"></div> Area Top Performers</h4>
-              <div class="space-y-1 bg-white rounded-xl border border-slate-100 p-3 shadow-sm">
-                <div class="kpi-row py-1.5"><span class="text-sm">📈 <b>Sales Growth</b></span><span class="text-sm text-right font-medium"><b>${bestSales.Branch}</b> <span class="text-emerald-600 font-bold">(${bestSales.Sales>0?'+':''}${(bestSales.Sales*100).toFixed(1)}%)</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">🎯 <b>Product Target</b></span><span class="text-sm text-right font-medium"><b>${bestProduct.Branch}</b> <span class="text-emerald-600 font-bold">(${bestProduct.Product>0?'+':''}${(bestProduct.Product*100).toFixed(1)}%)</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">🗑️ <b>Best Wastage</b></span><span class="text-sm text-right font-medium"><b>${bestWaste.Branch}</b> <span class="text-blue-600 font-bold">(${(bestWaste.Waste*100).toFixed(1)}%)</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">💷 <b>Lowest Labour %</b></span><span class="text-sm text-right font-medium"><b>${bestLabour.Branch}</b> <span class="text-indigo-600 font-bold">(${(bestLabour.Labour*100).toFixed(1)}%)</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">💰 <b>Best ATV</b></span><span class="text-sm text-right font-medium"><b>${bestATV.Branch}</b> <span class="text-emerald-600 font-bold">(£${(bestATV.ATV).toFixed(2)})</span></span></div>
-                <div class="kpi-row py-1.5"><span class="text-sm">🔌 <b>Best Energy</b></span><span class="text-sm text-right font-medium"><b>${bestEnergy.Branch}</b> <span class="text-emerald-600 font-bold">(${(bestEnergy.Energy).toFixed(0)} kWh)</span></span></div>
-              </div>
+              
+<h4 class="text-[11px] font-black muted uppercase mb-3">KPI Performance Table</h4>
+<div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 border-b">
+      <tr>
+        <th class="p-2 text-left font-bold text-slate-500">KPI</th>
+        <th class="p-2 text-left font-bold text-amber-600">Top Performer</th>
+        <th class="p-2 text-left font-bold text-emerald-600">Most Improved</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${['Sales','Product','Waste','Labour','ATV','Energy'].map(m=>{
+        const perf = (window.__areaWinsCache||[]).find(w=>w.Week===effectiveWeek && w.Metric===m && storeMap.get(canonicalStoreId(w.Branch))===am);
+        const imp = (window.__areaWinsCache||[]).find(w=>w.Week===effectiveWeek && w.Metric===m+' (Improvement)' && storeMap.get(canonicalStoreId(w.Branch))===am);
+        return `
+        <tr class="border-b">
+          <td class="p-2 font-bold text-slate-700">${m}</td>
+          <td class="p-2 text-amber-600 font-semibold">${perf?perf.Branch:'-'}</td>
+          <td class="p-2 text-emerald-600 font-semibold">${imp?imp.Branch:'-'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+</div>
+
             </div>
             <div class="landscape-right">
               <h4 class="text-[11px] font-black muted uppercase mb-4 flex items-center gap-2"><div class="w-1 h-3  rounded-full"></div> Operational Sectors (Area Avg: ${aAvg.toFixed(1)}%)</h4>
@@ -2803,7 +2897,18 @@ document.addEventListener('DOMContentLoaded', () => {
         type: 'line',
         data: {
             labels: storeData.map(d => 'Wk ' + d.Week),
-            datasets: [{ 
+            datasets: [
+
+        {
+            label: 'Company Average',
+            data: Array(20).fill(45), // Adjust '20' to match the number of weeks/labels on your x-axis
+            borderColor: 'rgba(128, 128, 128, 0.8)', // Grey line
+            borderDash: [5, 5], // This creates the dotted effect
+            borderWidth: 2,
+            pointRadius: 0, // Hides the dots on the line itself
+            fill: false
+        },
+    { 
                 label: 'Sales Variance %', 
                 data: storeData.map(d => d.Sales * 100), 
                 borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
@@ -2839,125 +2944,135 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 }
 </script>
-
-
 <script>
-async function exportFullStoreReport(){
+// ========= FINAL CLEAN LANDSCAPE + PORTRAIT HYBRID =========
+async function exportFullStoreReport() {
+
   const storeName = prompt("Enter store name to export:");
-  if(!storeName) return;
+  if (!storeName) return;
 
-  const zip = new JSZip();
-  const wait = () => new Promise(r => setTimeout(r, 900));
+  const { jsPDF } = window.jspdf;
 
-  function findStoreCard(){
-    let found = null;
-    document.querySelectorAll('[id^="card-"]').forEach(c=>{
-      const txt = c.innerText.toLowerCase();
-      if(txt.includes(storeName.toLowerCase())) found = c;
-    });
-    return found;
-  }
+  const wait = (t=800) => new Promise(r => setTimeout(r, t));
+  const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
 
-  async function captureElement(name, el){
-    if(!el) return;
-    const canvas = await renderElementToCanvas(el, {forceWidth:1400});
-    zip.file(name, canvas.toDataURL().split(',')[1], {base64:true});
-  }
+  const storeId = canonicalStoreId(storeName);
 
-  // Leaderboard
-  setView('leaderboard');
-  await wait();
-  function findLeaderboardRow(){
-  const targetId = canonicalStoreId(storeName);
-  let row = null;
-  document.querySelectorAll('#mainView tbody tr').forEach(r=>{
-    const txtId = canonicalStoreId(r.innerText);
-    if(txtId.includes(targetId)){
-      row = r;
-    }
-  });
-  return row;
-}
+  // =========================
+  // PAGE 1 — LANDSCAPE (STORE CARD)
+  // =========================
+  let pdf = new jsPDF('l', 'mm', 'a4'); // ✅ LANDSCAPE
 
-const lbRow = findLeaderboardRow();
-if(lbRow){
-  await captureElement('01_Leaderboard_Row.png', lbRow);
-}
-  // Storecard
   setView('storecards');
-  await wait();
-  const card = findStoreCard();
-  if(card){
-    await captureElement('02_Storecard.png', card);
+  await wait(900);
+
+  const card = document.querySelector('[id^="card-"]');
+
+  pdf.setFontSize(16);
+  pdf.text('Store Performance Report', 10, 12);
+  pdf.setFontSize(10);
+  pdf.text(storeName.toUpperCase(), 10, 18);
+
+  if (card) {
+    const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
+
+    const ratio = canvas.height / canvas.width;
+
+    const width = 277;  // ✅ full landscape width
+    const height = width * ratio;
+
+    pdf.addImage(
+        dataURL,
+        'PNG',
+        10,
+        y + 4,
+        width,
+        height
+      );
+
+      // === INSIGHT PATCH ===
+      try {
+        const latestStore = selectedSeries[selectedSeries.length - 1];
+        const latestCompany = companySeries ? companySeries[companySeries.length - 1] : null;
+
+        if (latestStore != null && latestCompany != null) {
+          const gap = (latestStore - latestCompany).toFixed(1);
+          pdf.setFontSize(9);
+          pdf.text(`Gap vs Company: ${gap > 0 ? '+' : ''}${gap}%`, 10, y + height + 6);
+        }
+
+        if (selectedSeries.length > 1) {
+          const last = selectedSeries[selectedSeries.length - 1];
+          const prev = selectedSeries[selectedSeries.length - 2];
+
+          let trend = '→ stable';
+          if (last > prev) trend = '↑ improving';
+          if (last < prev) trend = '↓ declining';
+
+          pdf.text(`Trend: ${trend}`, 100, y + height + 6);
+        }
+      } catch(e) {}
+
+      y += height + 14;
+    }
   }
 
-  // Banding
-  setView('banding');
-  await wait();
-  function findBandingRow(){
-  const targetId = canonicalStoreId(storeName);
-  let row = null;
-  document.querySelectorAll('#banding-card tbody tr').forEach(r=>{
-    const txtId = canonicalStoreId(r.innerText);
-    if(txtId.includes(targetId)){
-      row = r;
-    }
-  });
-  return row;
-}
+  // =========================
+  // FINAL PAGE — MEDALS
+  // =========================
+  pdf.addPage('p');
 
-const bandRow = findBandingRow();
-if(bandRow){
-  await captureElement('03_Banding_Row.png', bandRow);
-}
-
-  // Medals
   setView('halloffame');
-  await wait();
-  function findMedalRow(){
-  const targetId = canonicalStoreId(storeName);
-  let row = null;
-  document.querySelectorAll('#ytd-card tbody tr').forEach(r=>{
-    const txtId = canonicalStoreId(r.innerText);
-    if(txtId.includes(targetId)){
-      row = r;
-    }
+  await wait(900);
+
+  const rows = Array.from(document.querySelectorAll('#ytd-card tbody tr'));
+
+  const rowNode = rows.find(tr =>
+    canonicalStoreId(tr.innerText).includes(storeId)
+  );
+
+  pdf.setFontSize(14);
+  pdf.text('Awards & Recognition', 10, 20);
+
+  if (rowNode) {
+    const canvas = await renderElementToCanvas(rowNode, { forceWidth: 1000 });
+
+    const ratio = canvas.height / canvas.width;
+
+    const width = 190;
+    const height = width * ratio;
+
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 30, width, height);
+  // === WEEKLY MEDALS PATCH ===
+  const allWins = await idbGetAll('store_winners_log');
+  const storeWins = allWins
+    .filter(w => canonicalStoreId(w.Branch) === storeId)
+    .sort((a,b) => a.Week - b.Week);
+
+  let medalLines = {};
+  storeWins.forEach(w => {
+    if(!medalLines[w.Week]) medalLines[w.Week] = [];
+    medalLines[w.Week].push(w.Metric);
   });
-  return row;
-}
 
-const medalRow = findMedalRow();
-if(medalRow){
-  await captureElement('04_Medals_Row.png', medalRow);
-}
+  let textY = 30 + height + 10;
+  pdf.setFontSize(9);
+  pdf.text('Weekly Medals:', 10, textY);
+  pdf.text(`Total Medals: ${storeWins.length}`, 120, textY);
+  textY += 6;
 
+  Object.entries(medalLines).forEach(([wk, medals]) => {
+    const line = `Wk ${wk}: ${medals.join(', ')}`;
+    pdf.text(line, 10, textY);
+    textY += 5;
+  });
 
-  // Trends (all)
-  setView('trends');
-  await wait();
-
-  const metrics = ['Sales','Product','Waste','Labour','ATV','Energy','HotBev','HotRolls','FilledRolls','Audit'];
-  const metricSel = document.getElementById('trendMetric');
-
-  for(let m of metrics){
-    metricSel.value = m;
-    await drawTrendChart(true);
-    await new Promise(r=>setTimeout(r,200));
-
-    const canvas = document.getElementById('trendCanvas');
-    if(canvas){
-      zip.file(`Trend_${m}.png`, canvas.toDataURL().split(',')[1], {base64:true});
-    }
+  } else {
+    pdf.text('No KPI awards recorded.', 10, 30);
   }
 
-  const blob = await zip.generateAsync({type:'blob'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'Full_Report_'+storeName.replace(/\s+/g,'_')+'.zip';
-  a.click();
+  pdf.save('Store_Report_' + storeName.replace(/\s+/g, '_') + '.pdf');
 }
 </script>
-
-<script>function exportStorePDF(){console.warn("PDF disabled");}</script>
 </body>
 </html>
