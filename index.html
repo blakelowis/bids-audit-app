@@ -1674,9 +1674,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   const storeFilterRaw = (document.getElementById('trendStoreFilter')?.value || '').trim(); 
   const storeFilter = storeFilterRaw.toLowerCase();
   
-  if (storeFilterTriggered && storeFilter) {
-      document.getElementById('trendScope').value = 'Network';
-  }
+  
   const scope = document.getElementById('trendScope')?.value || 'Network';
   
   const storeMatch = (name) => { if(!storeFilter) return true; return canonicalStoreId(name).includes(canonicalStoreId(storeFilter)); };
@@ -1714,7 +1712,19 @@ async function drawTrendChart(storeFilterTriggered = false) {
   const isInverse = ['Waste','Labour','Energy'].includes(metric); const lineColor = isInverse ? '#F59E0B' : '#00A88E'; const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
   const labelScope = storeFilterRaw ? storeFilterRaw : scope;
   let datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 3, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
-  if(showCompany){ datasets.push({ label: 'Company Avg', data: companySeries, borderColor: 'rgba(59, 130, 246, 0.55)', backgroundColor: 'rgba(59, 130, 246, 0.00)', borderWidth: 2, borderDash: [6,6], pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.3, spanGaps: true }); }
+  if(showCompany){
+  datasets.push({
+    label: 'Company Avg',
+    data: companySeries,
+    borderColor: '#2563eb',
+    borderDash: [6,6],
+    borderWidth: 2,
+    fill: false,
+    pointRadius: 0,
+    tension: 0.3,
+    spanGaps: true
+  });
+}
   
 
   
@@ -1724,7 +1734,7 @@ trendChartInstance = new Chart(ctx, {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       onClick: function(evt, elements){ try{ if(elements && elements.length){ const idx = elements[0].index; const wk = weeks[idx]; if(wk){ setArchiveWeekOverride(wk); setView('overview'); } } }catch(e){} },
       scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } } },
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { family: 'Inter', size: 13, weight: 'bold' }, bodyFont: { family: 'Inter', size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, callbacks: { label: function(context) { const name = context.dataset?.label ? (context.dataset.label + ': ') : ''; let val = context.parsed.y; const isPct = (metric === 'Audit') || pctMetrics.includes(metric); if(isPct) return name + val + '%'; if(metric === 'ATV') return name + '£' + val; if(metric === 'Energy') return name + val + ' kWh'; return name + String(val); } } } }
+      plugins: { legend: { display: true }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { family: 'Inter', size: 13, weight: 'bold' }, bodyFont: { family: 'Inter', size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, callbacks: { label: function(context) { const name = context.dataset?.label ? (context.dataset.label + ': ') : ''; let val = context.parsed.y; const isPct = (metric === 'Audit') || pctMetrics.includes(metric); if(isPct) return name + val + '%'; if(metric === 'ATV') return name + '£' + val; if(metric === 'Energy') return name + val + ' kWh'; return name + String(val); } } } }
     }
   });
 }
@@ -2935,7 +2945,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========= FINAL CLEAN LANDSCAPE + PORTRAIT HYBRID =========
 async function exportFullStoreReport() {
 
-  const storeName = prompt("Enter store name to export:");
+  let storeName = document.getElementById('storeSelect')?.value;
+  if (!storeName) storeName = prompt("Enter store name to export:");
   if (!storeName) return;
 
   const { jsPDF } = window.jspdf;
@@ -2953,7 +2964,15 @@ async function exportFullStoreReport() {
   setView('storecards');
   await wait(900);
 
-  const card = document.querySelector('[id^="card-"]');
+  
+  const allCards = document.querySelectorAll('[id^="card-"]');
+  let card = Array.from(allCards).find(c =>
+    canonicalStoreId(c.innerText).includes(canonicalStoreId(storeName))
+  );
+  if (!card) {
+    card = Array.from(allCards)[0] || null;
+  }
+
 
   pdf.setFontSize(16);
   pdf.text('Store Performance Report', 10, 12);
@@ -2989,71 +3008,47 @@ async function exportFullStoreReport() {
   ];
 
   for (let i = 0; i < metrics.length; i++) {
+    try {
+        if (i > 0 && i % 2 === 0) {
+            pdf.addPage('p');
+            y = 18;
+        }
 
-    // ✅ 2 charts per page (clean layout)
-    if (i > 0 && i % 2 === 0) {
-      pdf.addPage('p');
-      y = 18;
+        const metricSel = document.getElementById('trendMetric');
+        if (metricSel) metricSel.value = metrics[i];
+
+        const storeDropdown = document.getElementById('trendStoreFilter');
+        if (storeDropdown) storeDropdown.value = storeName;
+
+        const scopeDropdown = document.getElementById('trendScope');
+        if (scopeDropdown) scopeDropdown.value = 'Network';
+
+        await drawTrendChart(false);
+        await new Promise(r => setTimeout(r, 400));
+
+        const baseCanvas = document.getElementById('trendCanvas');
+        if (!baseCanvas) continue;
+
+        const dataURL = baseCanvas.toDataURL('image/png');
+        const ratio = baseCanvas.height / baseCanvas.width;
+        const width = 180;
+        const height = width * ratio;
+
+        pdf.setFontSize(10);
+        pdf.text(metrics[i] + ' Trend', 10, y);
+
+        pdf.addImage(dataURL, 'PNG', 10, y + 4, width, height);
+
+        y += height + 10;
+
+    } catch(e) {
+        console.log('Trend export skipped:', metrics[i], e);
+        continue;
     }
+}
 
-    const metricSel = document.getElementById('trendMetric');
-    if (metricSel) metricSel.value = metrics[i];
-
-    // redraw chart
-    // FORCE correct context for company comparison
-    const storeDropdown = document.getElementById('trendStoreFilter');
-    if (storeDropdown) { storeDropdown.value = storeName; }
-
-    const scopeDropdown = document.getElementById('trendScope');
-    if (scopeDropdown) { let correctAM = 'Network';
-    if (window.storeMap) {
-        const id = canonicalStoreId(storeName);
-        correctAM = storeMap.get(id) || 'Network';
-    }
-    scopeDropdown.value = correctAM; }
-
-    await drawTrendChart(false);
-    await nextFrame();
-    await wait(1200);
-
-    // ✅ FORCE FULL CHART RENDER (fix dotted avg line)
-    if (window.trendChartInstance) {
-      window.trendChartInstance.update('none');
-      window.trendChartInstance.render();
-    }
-
-    const baseCanvas = document.getElementById('trendCanvas');
-
-    if (baseCanvas) {
-      // patched: direct capture to preserve layers
-      
-
-      await new Promise(r => setTimeout(r, 200));
-      const dataURL = baseCanvas.toDataURL('image/png');
-
-      const ratio = baseCanvas.height / baseCanvas.width;
-
-      const width = 180;
-      const height = width * ratio;
-
-      pdf.setFontSize(10);
-      pdf.text(metrics[i] + ' Trend', 10, y);
-
-      pdf.addImage(
-        dataURL,
-        'PNG',
-        10,
-        y + 4,
-        width,
-        height
-      );
-
-      y += height + 10;
-    }
-  }
-
-  // =========================
-  // FINAL PAGE — MEDALS
+// =========================
+// FINAL PAGE — MEDALS
   // =========================
   pdf.addPage('p');
 
