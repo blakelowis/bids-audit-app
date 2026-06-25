@@ -670,7 +670,8 @@ function calculateStoreScore(s){
         <button onclick="selectAndAnchorFolder()" class="btn-primary">📂 Select Master Folder</button>
         <button onclick="syncData()" class="btn-secondary">🔄 Refresh Data</button>
         <button onclick="exportVisibleViewAsZip()" class="btn-secondary">📦 Export View</button>
-        <button onclick="exportFullStoreReport()" class="btn-secondary">📦 Full Store Report</button>
+        <select id="exportStoreSelect" class="input-chip text-slate-700"></select>
+<button onclick="exportFullStoreReport()" class="btn-secondary">📦 Full Store Report</button>
         <button onclick="exportStorePDF()" class="btn-secondary" style="display:none;">PDF Report</button>
       </div>
     </header>
@@ -782,6 +783,7 @@ req.onupgradeneeded = e => {
 req.onsuccess = async e => { 
     db = e.target.result; 
     await loadStoreMap();
+    populateExportDropdown();
     await loadDirectoryHandle();
     renderDashboard();
 };
@@ -790,6 +792,21 @@ const idbGetAll = (s) => new Promise(res => { const r = db.transaction(s).object
 const idbAdd = (s, v) => new Promise(res => { try{ const r = db.transaction(s,'readwrite').objectStore(s).add(v); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch(e){ res(null); }});
 const idbPut = (s, v) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).put(v); r.onsuccess = () => res(true); r.onerror = (err) => { console.error('DB Put Error', err); res(false); }; });
 const idbClear = (s) => new Promise(res => { const r = db.transaction(s,'readwrite').objectStore(s).clear(); r.onsuccess = () => res(true); r.onerror = () => res(false); });
+
+
+function populateExportDropdown(){
+  const sel = document.getElementById('exportStoreSelect');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">🏪 Select Store</option>';
+  Array.from(originalStoreNames.values())
+    .sort()
+    .forEach(s=>{
+      const opt=document.createElement('option');
+      opt.value=s;
+      opt.textContent=s;
+      sel.appendChild(opt);
+    });
+}
 
 async function loadStoreMap() {
     const stores = await idbGetAll('stores');
@@ -2945,8 +2962,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========= FINAL CLEAN LANDSCAPE + PORTRAIT HYBRID =========
 async function exportFullStoreReport() {
 
-  let storeName = document.getElementById('storeSelect')?.value;
-  if (!storeName) storeName = prompt("Enter store name to export:");
+  let storeName = document.getElementById('exportStoreSelect')?.value;
+  if (!storeName) { alert('Select a store from the dropdown'); return; }
   if (!storeName) return;
 
   const { jsPDF } = window.jspdf;
@@ -3021,9 +3038,9 @@ async function exportFullStoreReport() {
         if (storeDropdown) storeDropdown.value = storeName;
 
         const scopeDropdown = document.getElementById('trendScope');
-        if (scopeDropdown) scopeDropdown.value = 'Network';
+        if (scopeDropdown) 
 
-        await drawTrendChart(false);
+        await drawTrendChart(true);
         await new Promise(r => setTimeout(r, 400));
 
         const baseCanvas = document.getElementById('trendCanvas');
