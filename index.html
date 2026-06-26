@@ -1738,6 +1738,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
     borderWidth: 2,
     fill: false,
     pointRadius: 0,
+      borderWidth: 2,
     tension: 0.3,
     spanGaps: true
   });
@@ -2919,7 +2920,8 @@ document.addEventListener('DOMContentLoaded', () => {
             borderColor: 'rgba(128, 128, 128, 0.8)', // Grey line
             borderDash: [5, 5], // This creates the dotted effect
             borderWidth: 2,
-            pointRadius: 0, // Hides the dots on the line itself
+            pointRadius: 0,
+      borderWidth: 2, // Hides the dots on the line itself
             fill: false
         },
     { 
@@ -2960,6 +2962,87 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 // ========= FINAL CLEAN LANDSCAPE + PORTRAIT HYBRID =========
+
+// ===== RANK TIMELINE SUPER ENGINE =====
+async function buildRankTimeline(branchName) {
+  const raw = await idbGetAll('kpi');
+  const branchId = canonicalStoreId(branchName);
+
+  const weeks = [...new Set(raw.map(k => k.Week))]
+    .filter(Boolean)
+    .sort((a,b)=>a-b);
+
+  const timeline = [];
+
+  for (const wk of weeks) {
+    const weekData = aggregateData(
+      raw.filter(k => k.Week === wk && !k.IsAnomaly)
+    );
+
+    if (!weekData.length) continue;
+
+    const rankMap = computeRankMap(weekData, 'Sales', false);
+    const rank = rankMap.get(branchId);
+
+    if (rank) {
+      timeline.push({ week: wk, rank: rank });
+    }
+  }
+
+  return timeline;
+}
+
+async function drawRankMovementChart(storeName, canvasId) {
+  const data = await buildRankTimeline(storeName);
+
+  const labels = data.map(d => 'Wk ' + d.week);
+  const ranks = data.map(d => d.rank);
+
+  const avgRank = ranks.length ? ranks.reduce((a,b)=>a+b,0)/ranks.length : null;
+
+  const ctx = document.getElementById(canvasId).getContext('2d');
+
+  const datasets = [{
+    label: 'Rank Position',
+    data: ranks,
+    borderColor: '#2563eb',
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    borderWidth: 3,
+    fill: true,
+    tension: 0.45,
+    pointRadius: 5
+  }];
+
+  if(avgRank !== null){
+    datasets.push({
+      label: 'Company Avg Rank',
+      data: Array(labels.length).fill(avgRank),
+      borderColor: '#94a3b8',
+      borderDash: [6,6],
+      pointRadius: 0,
+      borderWidth: 2,
+      fill: false
+    });
+  }
+
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: false,
+      plugins: { legend: { display: true } },
+      scales: {
+        y: {
+          reverse: true,
+          ticks: { stepSize: 1 },
+          title: { display: true, text: 'Rank' }
+        },
+        x: { title: { display: true, text: 'Week' } }
+      }
+    }
+  });
+}
+
 async function exportFullStoreReport() {
 
   let storeName = document.getElementById('exportStoreSelect')?.value;
@@ -2972,6 +3055,11 @@ async function exportFullStoreReport() {
   const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
 
   const storeId = canonicalStoreId(storeName);
+
+  const rawAll = await idbGetAll('kpi');
+  const match = rawAll.find(r => canonicalStoreId(r.Branch) === canonicalStoreId(storeName));
+  if(match){ storeName = match.Branch; }
+
 
   // =========================
   // PAGE 1 — LANDSCAPE (STORE CARD)
@@ -3065,6 +3153,48 @@ async function exportFullStoreReport() {
 }
 
 // =========================
+
+// ===== RANK MOVEMENT PAGE =====
+pdf.addPage('p');
+
+const tempCanvas = document.createElement('canvas');
+tempCanvas.id = 'rankChartTemp';
+tempCanvas.width = 900;
+tempCanvas.height = 400;
+document.body.appendChild(tempCanvas);
+
+await drawRankMovementChart(storeName, 'rankChartTemp');
+await new Promise(r => setTimeout(r, 400));
+
+const img = tempCanvas.toDataURL('image/png');
+
+// Rank summary
+const timeline = await buildRankTimeline(storeName);
+let summaryText = 'No rank data found (check store matching)';
+if(timeline.length){
+  pdf.text('DEBUG: Timeline loaded', 150, 20);
+  const first = timeline[0].rank;
+  const last = timeline[timeline.length-1].rank;
+  const diff = first - last;
+  const change = diff > 0 ? `Improved +${diff}` : diff < 0 ? `Down ${Math.abs(diff)}` : 'No Change';
+  summaryText = `Start #${first} | Latest #${last} | ${change}`;
+}
+
+pdf.setFontSize(14);
+pdf.text('Rank Movement Timeline', 10, 20);
+
+if(summaryText){
+  pdf.setFontSize(11);
+  pdf.setTextColor(40,40,40);
+  pdf.text(summaryText, 10, 28);
+}
+
+pdf.addImage(img, 'PNG', 10, 32, 180, 90);
+pdf.setFontSize(9);
+pdf.text('Trend shows movement vs company baseline (dashed line)', 10, 125);
+
+tempCanvas.remove();
+
 // FINAL PAGE — MEDALS
   // =========================
   pdf.addPage('p');
