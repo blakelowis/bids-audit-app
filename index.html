@@ -132,7 +132,7 @@ function generateSupportiveStoreCard(s, p) {
         { name: "Energy", val: getVal(s, ['Energy']), prev: getVal(p, ['Energy']), inverse: true, isRaw: true, suffix: ' kWh', format: (v) => Math.round(v) },
         { name: "Hot Drinks", val: getVal(s, ['HotBev']), prev: getVal(p, ['HotBev']), inverse: false, isRaw: false },
         { name: "Hot Food", val: getVal(s, ['HotRolls']), prev: getVal(p, ['HotRolls']), inverse: false, isRaw: false },
-        { name: "Cold Rolls", val: getVal(s, ['FilledRolls']), prev: getVal(p, ['FilledRolls']), inverse: false, isRaw: false },
+        { name: "Filled Rolls", val: getVal(s, ['FilledRolls']), prev: getVal(p, ['FilledRolls']), inverse: false, isRaw: false },
         { name: "Sandwiches", val: getVal(s, ['Sandwiches']), prev: getVal(p, ['Sandwiches']), inverse: false, isRaw: false }
     ];
 
@@ -1016,7 +1016,9 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     const metrics = [
       { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
       { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
-      { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' }
+      { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' },
+      { id: 'FilledRolls', order: 'desc' },
+      { id: 'Sandwiches', order: 'desc' }
     ];
 
     const areaImprovementPoints = {};
@@ -1704,7 +1706,8 @@ async function renderTrendsPanel() {
                     <option value="Energy">Energy (kWh)</option>
                     <option value="HotBev">Hot Drinks %</option>
                     <option value="HotRolls">Hot Food %</option>
-                    <option value="FilledRolls">Cold Rolls %</option>
+                    <option value="FilledRolls">Filled Rolls %</option>
+                    <option value="Sandwiches">Sandwiches %</option>
                     <option value="Audit">Audit Score %</option>
                   </select>
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
@@ -1805,7 +1808,7 @@ trendChartInstance = new Chart(ctx, {
 
 async function exportAllTrendsPNGs(){
   try{
-    const metrics = [ {id:'Sales', name:'Sales_Growth'}, {id:'Product', name:'Product_Target'}, {id:'Waste', name:'Wastage'}, {id:'Labour', name:'Labour'}, {id:'ATV', name:'ATV'}, {id:'Energy', name:'Energy'}, {id:'HotBev', name:'Hot_Drinks'}, {id:'HotRolls', name:'Hot_Food'}, {id:'FilledRolls', name:'Cold_Rolls'}, {id:'Audit', name:'Audit_Score'} ];
+    const metrics = [ {id:'Sales', name:'Sales_Growth'}, {id:'Product', name:'Product_Target'}, {id:'Waste', name:'Wastage'}, {id:'Labour', name:'Labour'}, {id:'ATV', name:'ATV'}, {id:'Energy', name:'Energy'}, {id:'HotBev', name:'Hot_Drinks'}, {id:'HotRolls', name:'Hot_Food'}, {id:'FilledRolls', name:'Filled_Rolls'}, {id:'Audit', name:'Audit_Score'} ];
     const metricSel = document.getElementById('trendMetric'); if(!metricSel){ alert('Trend metric selector not found.'); return; }
     const zip = new JSZip(); const originalMetric = metricSel.value; const waitFrame = () => new Promise(res => requestAnimationFrame(() => res()));
     for(const m of metrics){ metricSel.value = m.id; await drawTrendChart(); await waitFrame(); await new Promise(r => setTimeout(r, 60)); const canvas = document.getElementById('trendCanvas'); if(!canvas || !canvas.toDataURL) continue; const pngBase64 = canvas.toDataURL('image/png').split(',')[1]; zip.file(`${m.name}.png`, pngBase64, {base64:true}); }
@@ -2007,7 +2010,7 @@ if(currentView === 'banding') return renderBandingView();
     const kpiCats = [
         { label: 'Hot Food', kw: ['hot', 'roll'], ex: ['bev', 'drink'] },
         { label: 'Hot Drinks', kw: ['hot', 'bev'], ex: null },
-        { label: 'Cold Rolls', kw: ['filled', 'roll'], ex: ['hot'] },
+        { label: 'Filled Rolls', kw: ['filled', 'roll'], ex: ['hot'] },
         { label: 'Sandwiches', kw: ['sandwich'], ex: null }
     ];
 
