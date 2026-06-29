@@ -1551,6 +1551,46 @@ if (!storeMap.has(branchId)) {
   renderDashboard();
 }
 
+
+// ===== NEW: TREND SUMMARY ENGINE =====
+
+function drawSectionHeader(pdf, title, y){
+  pdf.setFillColor(0,168,142);
+  pdf.rect(10, y-6, 190, 8, 'F');
+  pdf.setTextColor(255,255,255);
+  pdf.setFontSize(11);
+  pdf.text(title.toUpperCase(), 12, y);
+  pdf.setTextColor(0,0,0);
+}
+
+function calculateTrendSummary(storeSeries, companySeries, inverse=false){
+  let under=0, near=0, above=0;
+  let total=0;
+  for(let i=0;i<storeSeries.length;i++){
+    const s = storeSeries[i];
+    const c = companySeries[i];
+    if(s==null || c==null) continue;
+    const diff = s - c;
+    total++;
+    const withinBand = Math.abs(diff) <= 1;
+    if(inverse){
+      if(diff < -1) under++; // GOOD
+      else if(withinBand) near++;
+      else above++;
+    } else {
+      if(diff > 1) above++; // GOOD
+      else if(withinBand) near++;
+      else under++;
+    }
+  }
+  if(total===0) return {under:0,near:0,above:0};
+  return {
+    under: Math.round((under/total)*100),
+    near: Math.round((near/total)*100),
+    above: Math.round((above/total)*100)
+  }
+}
+
 function getTrendStr(currVal, prevVal, isInverse=false, format='percent') {
  if(prevVal === undefined || isNaN(prevVal) || currVal === prevVal) return `<div class="trend-wrap"><span class="trend-flat">—</span><div class="spark spark-flat"></div></div>`;
  const diff = currVal - prevVal; const absDiff = Math.abs(diff); let fmt = '';
@@ -3140,11 +3180,26 @@ async function exportFullStoreReport() {
         const height = width * ratio;
 
         pdf.setFontSize(10);
-        pdf.text(metrics[i] + ' Trend', 10, y);
+        drawSectionHeader(pdf, metrics[i] + ' Performance', y); y += 6;
 
-        pdf.addImage(dataURL, 'PNG', 10, y + 4, width, height);
+        
+        pdf.rect(10, y+2, width, height+2);
+pdf.addImage(dataURL, 'PNG', 10, y + 4, width, height);
+        try{
+          const chart = trendChartInstance;
+          if(chart && chart.data.datasets.length>=2){
+            const storeData = chart.data.datasets[0].data;
+            const compData = chart.data.datasets[1].data;
+            const inverse = ['Waste','Labour','Energy'].includes(metrics[i]);
+            const summary = calculateTrendSummary(storeData, compData, inverse);
+            const textY = y + height + 6;
+            pdf.setFontSize(9);
+            pdf.setFillColor(245,245,245); pdf.rect(10, y + height + 4, 180, 8, 'F'); pdf.setFontSize(9); pdf.text(`Under Avg: ${summary.under}%  |  Within 1%: ${summary.near}%  |  Above Avg: ${summary.above}%`, 10, textY);
+          }
+        }catch(e){}
 
-        y += height + 10;
+
+        y += height + 16;
 
     } catch(e) {
         console.log('Trend export skipped:', metrics[i], e);
@@ -3172,7 +3227,7 @@ const img = tempCanvas.toDataURL('image/png');
 const timeline = await buildRankTimeline(storeName);
 let summaryText = 'No rank data found (check store matching)';
 if(timeline.length){
-  pdf.text('DEBUG: Timeline loaded', 150, 20);
+  pdf.text('', 150, 20);
   const first = timeline[0].rank;
   const last = timeline[timeline.length-1].rank;
   const diff = first - last;
