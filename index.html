@@ -178,8 +178,8 @@ function generateSupportiveStoreCard(s, p) {
         }
         
         return `
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border ${bgClass} shadow-sm gap-2">
-                <span class="text-sm md:text-base font-bold leading-tight">${m.name}</span>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-xl border ${bgClass} shadow-sm gap-2">
+                <span class="text-base md:text-lg font-black leading-tight">${m.name}</span>
                 <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto shrink-0 gap-2 sm:gap-0">
                     <span class="text-sm opacity-80 font-medium mb-0.5">${m.displayVal}</span>
                     <span class="text-base font-black ${trendCol}">${formatDiff(m.variance)}</span>
@@ -209,16 +209,16 @@ function generateSupportiveStoreCard(s, p) {
     const safeId = "card-" + s.Branch.replace(/[ 	]+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
 
     return `
-      <div id="${safeId}" class="bg-white p-8 rounded-2xl shadow-md flex flex-col gap-6 border border-slate-200 relative mt-4">
+      <div id="${safeId}" class="bg-white p-6 rounded-2xl shadow-md flex flex-col gap-4 border border-slate-200 relative mt-4">
         
         <button onclick="exportToPNG('${safeId}', 'Scorecard_${s.Branch}')" class="export-btn absolute top-6 right-6 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg text-slate-600 transition-colors shadow-sm" title="Download as PNG">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         </button>
 
-        <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4 border-b border-slate-100 pb-6 pr-14">
+        <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-2 border-b border-slate-100 pb-4 pr-14">
           <div class="flex flex-col gap-2.5">
               <div class="flex items-center gap-3">
-                  <h2 class="font-black text-3xl text-slate-800 tracking-tight">${s.Branch}</h2>
+                  <h2 class="font-black text-[36px] text-slate-800 tracking-tight">${s.Branch}</h2>
                   <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-md shadow-sm">Wk ${weekNum}</span>
               </div>
               <div class="flex items-center gap-2">
@@ -238,7 +238,7 @@ ${(window.storeMedalsMap && window.storeMedalsMap[s.Branch]) ? `<div class="mt-2
         <div class="flex flex-col gap-6">
             <div>
                 <h3 class="text-sm uppercase tracking-widest font-black text-slate-400 mb-4 pl-1">📊 Weekly Highlights & Tracking</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                     ${winning.map(m => renderPill(m, 'win')).join('')}
                     ${neutral.map(m => renderPill(m, 'neutral')).join('')}
                     ${(winning.length === 0 && neutral.length === 0) ? '<span class="text-sm text-slate-400 italic pl-1">No data available.</span>' : ''}
@@ -248,7 +248,7 @@ ${(window.storeMedalsMap && window.storeMedalsMap[s.Branch]) ? `<div class="mt-2
             ${focus.length > 0 ? `
             <div class="pt-2">
                 <h3 class="text-sm uppercase tracking-widest font-black text-amber-600 mb-4 pl-1">🧭 Core Focus Areas</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                     ${focus.map(m => renderPill(m, 'focus')).join('')}
                 </div>
             </div>
@@ -404,7 +404,7 @@ async function exportStoreCardsZip(){
         const btn = card.querySelector('.export-btn');
         if(btn) btn.style.display = 'none';
         card.classList.add('export-force-landscape');
-        const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
+        const canvas = await renderElementToCanvas(card, { forceWidth: 1800 });
         const img = canvas.toDataURL('image/png').split(',')[1];
         const baseName = (currentView === 'overview') ? 'Overview'
                       : (currentView === 'winners') ? 'Winners'
@@ -527,7 +527,13 @@ async function exportStoreCardsZip(){
     .spark-up{ background: linear-gradient(90deg, rgba(0,168,142,.12), rgba(0,168,142,.42)); }
     .spark-down{ background: linear-gradient(90deg, rgba(220,38,38,.10), rgba(220,38,38,.40)); }
     .spark-flat{ background: linear-gradient(90deg, rgba(148,163,184,.12), rgba(148,163,184,.35)); }
-  </style>
+  @media print {
+  body { zoom: 0.9; }
+  .card, .bg-white { page-break-inside: avoid; margin-bottom: 10px !important; }
+  h2 { font-size: 28px !important; }
+  .export-btn { display: none !important; }
+}
+</style>
 
     <script>
     function exportToPNG(elementId, filename) {
@@ -548,7 +554,7 @@ async function exportStoreCardsZip(){
         const btns = el.querySelectorAll('.export-btn');
         btns.forEach(b => b.style.display = 'none');
         
-        html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false }).then(canvas => {
+        html2canvas(el, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff', logging: false }).then(canvas => {
             btns.forEach(b => b.style.display = ''); 
             const link = document.createElement('a');
             link.download = filename + '.png';
@@ -649,7 +655,7 @@ function calculateStoreScore(s){
           <div style="display:none;" class="w-full h-full bg-slate-50 items-center justify-center font-black text-birds-green text-xl rounded-full">B</div>
         </div>
         <div>
-          <h1 class="text-3xl font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub v37</h1>
+          <h1 class="text-[36px] font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub v37</h1>
           <div class="flex items-center gap-2 mt-1">
             <span id="activeWeekBadge" class="bg-birds text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">LATEST DATA</span>
             <p id="folderStatus" class="text-slate-500 text-sm italic">Status: Not Anchored</p>
@@ -1198,7 +1204,7 @@ if (!origName) {
       </div>
       <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
           <div>
-            <h2 class="text-3xl font-black outfit birds-green uppercase tracking-tighter">🏆 Awards & Leaderboards</h2>
+            <h2 class="text-[36px] font-black outfit birds-green uppercase tracking-tighter">🏆 Awards & Leaderboards</h2>
             <p class="text-slate-500 text-sm font-bold">${currentAwardsYear} • ${periodLabel}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -1609,7 +1615,7 @@ async function renderElementToCanvas(el, {forceWidth=null} = {}){
   expandEls.forEach(n => { originalStyles.push({ el: n, overflow: n.style.overflow, maxHeight: n.style.maxHeight, height: n.style.height }); n.style.overflow = 'visible'; n.style.maxHeight = 'none'; n.style.height = 'auto'; });
   await new Promise(r => requestAnimationFrame(() => r()));
   const rect = target.getBoundingClientRect(); const cssWidth = forceWidth ? forceWidth : Math.ceil(Math.max(target.scrollWidth, rect.width)); const cssHeight = Math.ceil(Math.max(target.scrollHeight, rect.height));
-  const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, width: cssWidth, height: cssHeight, windowWidth: cssWidth, windowHeight: cssHeight, scrollX: -window.scrollX, scrollY: -window.scrollY, onclone: (doc) => { try { const cloneEl = target.id ? doc.getElementById(target.id) : null; if(!cloneEl) return; cloneEl.classList.add('export-force-landscape'); if(forceWidth) cloneEl.style.width = forceWidth + 'px'; } catch(e) {} } });
+  const canvas = await html2canvas(target, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false, width: cssWidth, height: cssHeight, windowWidth: cssWidth, windowHeight: cssHeight, scrollX: -window.scrollX, scrollY: -window.scrollY, onclone: (doc) => { try { const cloneEl = target.id ? doc.getElementById(target.id) : null; if(!cloneEl) return; cloneEl.classList.add('export-force-landscape'); if(forceWidth) cloneEl.style.width = forceWidth + 'px'; } catch(e) {} } });
   originalStyles.forEach(item => { item.el.style.overflow = item.overflow; item.el.style.maxHeight = item.maxHeight; item.el.style.height = item.height; });
   return canvas;
 }
@@ -1618,7 +1624,7 @@ function exportCard(cardId, name) {
   const el = document.getElementById(cardId); if(!el) return;
   const btn = el.querySelector('.export-btn'); if(btn) btn.style.display = 'none';
   el.classList.add('export-force-landscape');
-  renderElementToCanvas(el, { forceWidth: 1400 }).then(canvas => {
+  renderElementToCanvas(el, { forceWidth: 1800 }).then(canvas => {
     const link = document.createElement('a'); link.download = `Birds_Report_${name.replace(/\s+/g, '_')}.png`; link.href = canvas.toDataURL('image/png'); link.click();
     if(btn) btn.style.display = 'flex'; el.classList.remove('export-force-landscape');
   });
@@ -1630,7 +1636,7 @@ async function exportAllCardsToZip() {
     for(let i=0; i<cards.length; i++){
         const card = cards[i]; const amName = card.getAttribute('data-am'); const exBtn = card.querySelector('.export-btn');
         if(exBtn) exBtn.style.display = 'none'; card.classList.add('export-force-landscape');
-        const canvas = await html2canvas(card, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: 1400 });
+        const canvas = await html2canvas(card, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, width: 1400 });
         const base64Data = canvas.toDataURL('image/png').split(',')[1]; zip.file(`Birds_Area_Report_${amName.replace(/\s+/g, '_')}_${currentTimeFilter}.png`, base64Data, {base64: true});
         if(exBtn) exBtn.style.display = 'flex'; card.classList.remove('export-force-landscape');
     }
@@ -1716,7 +1722,7 @@ async function renderTrendsPanel() {
                     </select>
                 </div>
             </div>
-            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-inner relative h-[450px] w-full">
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-3 shadow-inner relative h-[520px] w-full">
                 <canvas id="trendCanvas"></canvas>
             </div>
         </div>
@@ -1768,7 +1774,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(trendChartInstance) trendChartInstance.destroy();
   const isInverse = ['Waste','Labour','Energy'].includes(metric); const lineColor = isInverse ? '#F59E0B' : '#00A88E'; const bgColor = isInverse ? 'rgba(245, 158, 11, 0.10)' : 'rgba(0, 168, 142, 0.10)';
   const labelScope = storeFilterRaw ? storeFilterRaw : scope;
-  let datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 3, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
+  let datasets = [{ label: labelScope, data: selectedSeries, borderColor: lineColor, backgroundColor: bgColor, borderWidth: 4, pointBackgroundColor: '#ffffff', pointBorderColor: lineColor, pointBorderWidth: 2, pointRadius: 6, pointHoverRadius: 7, fill: true, tension: 0.3, spanGaps: true }];
   if(showCompany){
   datasets.push({
     label: 'Company Avg',
@@ -1791,8 +1797,8 @@ trendChartInstance = new Chart(ctx, {
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       onClick: function(evt, elements){ try{ if(elements && elements.length){ const idx = elements[0].index; const wk = weeks[idx]; if(wk){ setArchiveWeekOverride(wk); setView('overview'); } } }catch(e){} },
-      scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold' }, color: '#64748b' } } },
-      plugins: { legend: { display: true }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { family: 'Inter', size: 13, weight: 'bold' }, bodyFont: { family: 'Inter', size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, callbacks: { label: function(context) { const name = context.dataset?.label ? (context.dataset.label + ': ') : ''; let val = context.parsed.y; const isPct = (metric === 'Audit') || pctMetrics.includes(metric); if(isPct) return name + val + '%'; if(metric === 'ATV') return name + '£' + val; if(metric === 'Energy') return name + val + ' kWh'; return name + String(val); } } } }
+      scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } } },
+      plugins: { legend: { display: true }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { family: 'Inter', size: 14, weight: 'bold' }, bodyFont: { family: 'Inter', size: 16, weight: 'bold' }, padding: 12, cornerRadius: 8, callbacks: { label: function(context) { const name = context.dataset?.label ? (context.dataset.label + ': ') : ''; let val = context.parsed.y; const isPct = (metric === 'Audit') || pctMetrics.includes(metric); if(isPct) return name + val + '%'; if(metric === 'ATV') return name + '£' + val; if(metric === 'Energy') return name + val + ' kWh'; return name + String(val); } } } }
     }
   });
 }
@@ -1934,12 +1940,12 @@ if(currentView === 'banding') return renderBandingView();
              <h3 class="font-black outfit text-indigo-600 mb-4 text-sm uppercase">Proactive Coaching Tracker</h3>
              <div class="bg-indigo-50 rounded-xl p-4 mb-4 border border-indigo-100">
                  <div class="text-[10px] font-bold text-indigo-800 uppercase mb-1">⚡ Focus Sectors (Sub-90%)</div>
-                 <div class="flex items-end justify-between"><div><span class="text-3xl font-black text-indigo-600">${currCrits}</span><span class="text-xs text-indigo-700 ml-1">Incidents logged</span></div><div class="pb-1">${getTrendStr(currCrits, prevCrits, true, 'whole')}</div></div>
+                 <div class="flex items-end justify-between"><div><span class="text-[36px] font-black text-indigo-600">${currCrits}</span><span class="text-xs text-indigo-700 ml-1">Incidents logged</span></div><div class="pb-1">${getTrendStr(currCrits, prevCrits, true, 'whole')}</div></div>
                  <p class="text-[10px] text-indigo-600 mt-2 leading-tight">Total count of individual audit sectors dropping below 90% across the entire network.</p>
              </div>
              <div class="bg-indigo-50 rounded-xl p-4 mb-4 border border-indigo-100">
                  <div class="text-[10px] font-bold text-indigo-800 uppercase mb-1">⏱️ Avg Action Close Rate</div>
-                 <div class="flex items-end justify-between"><div><span class="text-3xl font-black text-indigo-600">${currCloseAvg.toFixed(1)}</span><span class="text-xs text-indigo-700 ml-1">Days to clear</span></div><div class="pb-1">${getTrendStr(currCloseAvg, prevCloseAvg, true, 'decimal')}</div></div>
+                 <div class="flex items-end justify-between"><div><span class="text-[36px] font-black text-indigo-600">${currCloseAvg.toFixed(1)}</span><span class="text-xs text-indigo-700 ml-1">Days to clear</span></div><div class="pb-1">${getTrendStr(currCloseAvg, prevCloseAvg, true, 'decimal')}</div></div>
                  <p class="text-[10px] text-indigo-600 mt-2 leading-tight">Measures how quickly store management reacts to and resolves audit failures.</p>
              </div>
              <div class="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm"><div class="text-[10px] font-bold text-slate-800 uppercase mb-2">📌 Top 3 Common Audit Failures</div>${actionsHtml}</div>
@@ -2095,7 +2101,7 @@ if(currentView === 'banding') return renderBandingView();
                  <div><small class="muted uppercase font-bold text-[10px]">ATV</small><div class="text-lg font-black text-slate-800">£${(avgK('ATV')).toFixed(2)}</div>${getTrendStr(avgK('ATV'), pAvgK('ATV'), false, 'currency')}</div>
                  <div><small class="muted uppercase font-bold text-[10px]">Energy</small><div class="text-lg font-black text-slate-800">${(avgK('Energy')).toFixed(0)}</div>${getTrendStr(avgK('Energy'), pAvgK('Energy'), true, 'whole')}</div>
               </div>
-              <div class="mb-6 p-4 rounded-xl border ${alertBoxCol}"><div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div><div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div></div>
+              <div class="mb-6 p-5 rounded-xl border ${alertBoxCol}"><div class="text-[10px] font-black ${alertTextCol} uppercase mb-2 tracking-wide">🎯 Performance Focus Area</div><div class="text-sm text-slate-700 leading-snug font-medium"><b>${focus.name}</b> indicates the highest variance against the network average (<span class="${alertTextCol} font-bold">${focus.fmt(focus.diff)}</span>). Prioritize this sector for coaching interventions.</div></div>
               
 <h4 class="text-[11px] font-black muted uppercase mb-3">KPI Performance Table</h4>
 <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
@@ -2374,7 +2380,7 @@ const cards = list.map(s => {
 
     document.getElementById('mainView').innerHTML = `
       <div class="flex justify-between items-center mb-6">
-      <h2 class="text-3xl font-black">Store Scorecards</h2>
+      <h2 class="text-[36px] font-black">Store Scorecards</h2>
       <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Export / Print
@@ -2816,6 +2822,12 @@ async function renderBandingView(){
       box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
       position: relative;
   }
+@media print {
+  body { zoom: 0.9; }
+  .card, .bg-white { page-break-inside: avoid; margin-bottom: 10px !important; }
+  h2 { font-size: 28px !important; }
+  .export-btn { display: none !important; }
+}
 </style>
 
 
@@ -2850,7 +2862,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="grid grid-cols-2 gap-6 mb-10">
             <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
                 <div class="text-xs uppercase font-black text-slate-400 mb-2 tracking-wider">Area Manager</div>
-                <div class="text-3xl font-black text-slate-800">${latest.AM || 'N/A'}</div>
+                <div class="text-[36px] font-black text-slate-800">${latest.AM || 'N/A'}</div>
             </div>
             <div class="flex gap-4">
                 <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 flex-1 text-center">
@@ -2890,7 +2902,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="dossier-p2" class="dossier-page-container">
         <div class="border-b-4 border-slate-900 pb-4 mb-8">
             <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
-            <h2 class="text-3xl font-black text-slate-900 tracking-tighter">Efficiency & Anomalies</h2>
+            <h2 class="text-[36px] font-black text-slate-900 tracking-tighter">Efficiency & Anomalies</h2>
         </div>
 
         <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">Labour vs Waste Expenditure Timeline</h3>
@@ -2920,7 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
             <div>
                 <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
-                <h2 class="text-3xl font-black text-slate-900 tracking-tighter">YTD Data Ledger</h2>
+                <h2 class="text-[36px] font-black text-slate-900 tracking-tighter">YTD Data Ledger</h2>
             </div>
         </div>
 
@@ -2968,7 +2980,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: 'Sales Variance %', 
                 data: storeData.map(d => d.Sales * 100), 
                 borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                borderWidth: 3, tension: 0.3, fill: true
+                borderWidth: 4, tension: 0.3, fill: true
             }]
         },
         options: { responsive: true, maintainAspectRatio: false }
@@ -3047,10 +3059,10 @@ async function drawRankMovementChart(storeName, canvasId) {
     data: ranks,
     borderColor: '#2563eb',
     backgroundColor: 'rgba(37, 99, 235, 0.1)',
-    borderWidth: 3,
+    borderWidth: 4,
     fill: true,
     tension: 0.45,
-    pointRadius: 5
+    pointRadius: 6
   }];
 
   if(avgRank !== null){
@@ -3125,7 +3137,7 @@ async function exportFullStoreReport() {
   pdf.text(storeName.toUpperCase(), 10, 18);
 
   if (card) {
-    const canvas = await renderElementToCanvas(card, { forceWidth: 1400 });
+    const canvas = await renderElementToCanvas(card, { forceWidth: 1800 });
 
     const ratio = canvas.height / canvas.width;
 
