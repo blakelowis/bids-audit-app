@@ -209,7 +209,7 @@ function generateSupportiveStoreCard(s, p) {
     const safeId = "card-" + s.Branch.replace(/[ 	]+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
 
     return `
-      <div id="${safeId}" class="bg-white p-6 rounded-2xl shadow-md flex flex-col gap-4 border border-slate-200 relative mt-4">
+      <div id="${safeId}" class="bg-white p-6 rounded-2xl shadow-md flex flex-col gap-4 border border-slate-200 relative mt-4 area-card-export">
         
         <button onclick="exportToPNG('${safeId}', 'Scorecard_${s.Branch}')" class="export-btn absolute top-6 right-6 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg text-slate-600 transition-colors shadow-sm" title="Download as PNG">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -709,11 +709,29 @@ function calculateStoreScore(s){
 
 <script>
 const DEFAULT_AREA_MAPPING = {
-  'Katie Cartwright': ['Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark','Radcliffe','Ruddington','Southwell','Teal Park','West Bridgford','Wollaton'],
-  'Craig White': ['Alfreton','Arnold','Beeston','Clay Cross','Ilkeston','Lister Gate','Long Eaton','Mansfield','Mapperley','Sherwood','Sutton','Sutton Lakeside','Victoria Centre'],
-  'Paul Reeves': ['Allenton','Alvaston','Bakery Shop','Belper','Duffield','Eastwood','Heanor','Hucknall','Mackworth','Matlock','Ripley','Spondon'],
-  'Suzanne Green': ['Albert Street','Ashbourne','Borrowash','Chaddesden','Chellaston','Derbion Crown Walk','Littleover','Melbourne','Mickleover','Oakwood','Park Farm','Sinfin','Uttoxeter'],
-  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Coalville','East Leake','Keyworth','Lichfield','Lansdowne Drive','Loughborough','Stretton','Swadlincote','Tamworth']
+  'Katie Cartwright': [
+    'Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark',
+    'Radcliffe','Ruddington','Southwell','Teal Park','West Bridgford','Wollaton'
+  ],
+  'Craig White': [
+    'Alfreton','Arnold','Beeston','Clay Cross','Ilkeston','Lister Gate',
+    'Long Eaton','Mansfield','Mapperley','Sherwood','Sutton',
+    'Sutton Lakeside','Victoria Centre'
+  ],
+  'Paul Reeves': [
+    'Allenton','Alvaston','Bakery Shop','Belper','Duffield','Eastwood',
+    'Heanor','Hucknall','Mackworth','Matlock','Ripley','Spondon'
+  ],
+  'Suzanne Green': [
+    'Albert Street','Ashbourne','Borrowash','Chaddesden','Chellaston',
+    'Derbion Crown Walk','Littleover','Melbourne','Mickleover',
+    'Oakwood','Park Farm','Sinfin','Uttoxeter'
+  ],
+  'Thomas Henson': [
+    'Anstey','Ashby','Branston','Burton','Coalville','East Leake',
+    'Keyworth','Lichfield','Lansdowne Drive','Loughborough',
+    'Stretton','Swadlincote','Tamworth'
+  ]
 };
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
 
@@ -2410,7 +2428,7 @@ const cards = list.map(s => {
     document.getElementById('mainView').innerHTML = `
       <div class="flex justify-between items-center mb-6">
       <h2 class="text-[36px] font-black">Store Scorecards</h2>
-      <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
+      <button onclick="exportStoreCardsZip()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Export / Print
       </button>
