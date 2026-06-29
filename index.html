@@ -10,6 +10,68 @@
 
   <script>
 
+// ===== SAFE AWARDS & AM INTERCEPTOR =====
+window.dynamicAreaManagers = {};
+window.mockStoreWinnersLog = [];
+window.storeMedalsMap = {};
+
+// 1. Intercept SheetJS to grab the AW column automatically during your folder loop
+if (typeof XLSX !== 'undefined') {
+    const originalSheetToJson = XLSX.utils.sheet_to_json;
+    XLSX.utils.sheet_to_json = function(worksheet, opts) {
+        const data = originalSheetToJson.apply(this, arguments);
+        
+        if (data && data.length > 0) {
+            data.forEach(row => {
+                const rawBranch = row['Branch'] || row['Store'] || "";
+                if (!rawBranch) return;
+                
+                // Harvest Area Manager
+                const am = row['Area Manager'] || row['AM'];
+                if (am) {
+                    window.dynamicAreaManagers[rawBranch] = am;
+                }
+                
+                // Harvest AW Column for awards (e.g., for Mackworth, etc.)
+                const award = row['AW'];
+                if (award && String(award).trim() !== '') {
+                    const week = row['Week'] || window.currentWeek || 0;
+                    const awardStr = String(award).trim();
+                    
+                    // Prevent duplicates if the same file is parsed twice
+                    const isDuplicate = window.mockStoreWinnersLog.some(
+                        w => w.Branch === rawBranch && w.Week === week && w.Metric === awardStr
+                    );
+                    
+                    if (!isDuplicate) {
+                        window.mockStoreWinnersLog.push({
+                            Branch: rawBranch,
+                            Week: week,
+                            Metric: awardStr
+                        });
+                    }
+                }
+            });
+        }
+        return data;
+    };
+}
+
+// 2. Intercept the database call to feed the Hall of Fame directly from the folder upload
+const originalIdbGetAll = window.idbGetAll;
+window.idbGetAll = async function(storeName) {
+    if (storeName === 'store_winners_log') {
+        console.log("Serving YTD Awards directly from the AW column of the uploaded report.");
+        return window.mockStoreWinnersLog;
+    }
+    if (originalIdbGetAll) {
+        return await originalIdbGetAll(storeName);
+    }
+    return [];
+};
+// ========================================
+
+
 // ===== STRICT CHRONOLOGICAL PARSER =====
 // Guarantees data is perfectly ordered regardless of local hard drive read speeds
 
@@ -222,7 +284,7 @@ function generateSupportiveStoreCard(s, p) {
                   <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-md shadow-sm">Wk ${weekNum}</span>
               </div>
               <div class="flex items-center gap-2">
-                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}
+                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${(window.dynamicAreaManagers[s.Branch] || s.AM || 'Store Manager')}
 ${(window.storeMedalsMap && window.storeMedalsMap[s.Branch]) ? `<div class="mt-2 flex flex-wrap gap-1">${window.storeMedalsMap[s.Branch].map(m=>{const isImp=m.includes('(Improvement)');return `<span class="text-[10px] font-black px-2 py-1 rounded-md border ${isImp?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-amber-50 text-amber-700 border-amber-200'}">${isImp?'📈':'🥇'} ${m.replace(' (Improvement)','')}</span>`}).join('')}</div>`:''}</span>
               </div>
               <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5  px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
