@@ -1764,7 +1764,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(showCompany){ (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w)); }
   if(!weekSet.size) return;
   const weeks = Array.from(weekSet).filter(w => w!=null).sort((a,b)=>a-b);
-  const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches'];
+  const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches','Sandwiches'];
   const valueForWeek = (arr, week, field) => {
     const wk = arr.filter(x => x.Week === week); if(!wk.length) return null;
     if(field === '__AUDIT__'){ const avg = wk.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wk.length; return Number(avg.toFixed(1)); }
@@ -1782,12 +1782,11 @@ async function drawTrendChart(storeFilterTriggered = false) {
   datasets.push({
     label: 'Company Avg',
     data: companySeries,
-    borderColor: '#2563eb',
-    borderDash: [6,6],
-    borderWidth: 2,
+    borderColor: '#1d4ed8',
+    borderDash: [8,6],
+    borderWidth: 3,
     fill: false,
     pointRadius: 0,
-      borderWidth: 2,
     tension: 0.3,
     spanGaps: true
   });
@@ -1798,6 +1797,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
 trendChartInstance = new Chart(ctx, {
     type: 'line', data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
+      animation: false,
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       onClick: function(evt, elements){ try{ if(elements && elements.length){ const idx = elements[0].index; const wk = weeks[idx]; if(wk){ setArchiveWeekOverride(wk); setView('overview'); } } }catch(e){} },
       scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } } },
@@ -2982,11 +2982,12 @@ document.addEventListener('DOMContentLoaded', () => {
     { 
                 label: 'Sales Variance %', 
                 data: storeData.map(d => d.Sales * 100), 
-                borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderColor: '#1d4ed8', backgroundColor: 'rgba(37, 99, 235, 0.1)',
                 borderWidth: 4, tension: 0.3, fill: true
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+      animation: false, responsive: true, maintainAspectRatio: false }
     });
 
     const ctx2 = document.getElementById('dossier-chart-ops').getContext('2d');
@@ -3000,7 +3001,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 { label: 'Waste %', data: storeData.map(d => d.Waste * 100), backgroundColor: '#f59e0b' }
             ]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+      animation: false, responsive: true, maintainAspectRatio: false }
     });
 }
 
@@ -3060,7 +3062,7 @@ async function drawRankMovementChart(storeName, canvasId) {
   const datasets = [{
     label: 'Rank Position',
     data: ranks,
-    borderColor: '#2563eb',
+    borderColor: '#1d4ed8',
     backgroundColor: 'rgba(37, 99, 235, 0.1)',
     borderWidth: 4,
     fill: true,
@@ -3073,7 +3075,7 @@ async function drawRankMovementChart(storeName, canvasId) {
       label: 'Company Avg Rank',
       data: Array(labels.length).fill(avgRank),
       borderColor: '#94a3b8',
-      borderDash: [6,6],
+      borderDash: [8,6],
       pointRadius: 0,
       borderWidth: 2,
       fill: false
@@ -3084,11 +3086,15 @@ async function drawRankMovementChart(storeName, canvasId) {
     type: 'line',
     data: { labels, datasets },
     options: {
+      animation: false,
       responsive: false,
       plugins: { legend: { display: true } },
       scales: {
         y: {
           reverse: true,
+        min: Math.max(1, Math.min(...ranks) - 3),
+        max: Math.max(...ranks) + 3,
+
           ticks: { stepSize: 1 },
           title: { display: true, text: 'Rank' }
         },
@@ -3164,7 +3170,7 @@ async function exportFullStoreReport() {
 
   const metrics = [
     'Sales','Product','Waste','Labour','ATV','Energy',
-    'HotBev','HotRolls','FilledRolls'
+    'HotBev','HotRolls','FilledRolls','Sandwiches'
   ];
 
   for (let i = 0; i < metrics.length; i++) {
@@ -3199,7 +3205,7 @@ async function exportFullStoreReport() {
 
         
         pdf.rect(10, y+2, width, height+2);
-pdf.addImage(dataURL, 'PNG', 10, y + 4, width, height);
+pdf.addImage(dataURL, 'PNG', 10, y + 2, width, height);
         try{
           const chart = trendChartInstance;
           if(chart && chart.data.datasets.length>=2){
@@ -3207,9 +3213,9 @@ pdf.addImage(dataURL, 'PNG', 10, y + 4, width, height);
             const compData = chart.data.datasets[1].data;
             const inverse = ['Waste','Labour','Energy'].includes(metrics[i]);
             const summary = calculateTrendSummary(storeData, compData, inverse);
-            const textY = y + height + 6;
+            const textY = y + height + 10;
             pdf.setFontSize(9);
-            pdf.setFillColor(245,245,245); pdf.rect(10, y + height + 4, 180, 8, 'F'); pdf.setFontSize(9); pdf.text(`Under Avg: ${summary.under}%  |  Within 1%: ${summary.near}%  |  Above Avg: ${summary.above}%`, 10, textY);
+            pdf.setFillColor(245,245,245); pdf.rect(10, y + height + 6, 180, 10, 'F'); pdf.setFontSize(9); pdf.text(`Under Avg: ${summary.under}%  |  Within 1%: ${summary.near}%  |  Above Avg: ${summary.above}%`, 10, textY);
           }
         }catch(e){}
 
