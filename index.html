@@ -583,19 +583,24 @@ async function exportStoreCardsZip(){
 
 function resolveStoreAM(row, branchId){
  const AM_NAMES=['Katie Cartwright','Craig White','Paul Reeves','Suzanne Green','Thomas Henson'];
- let excelAM=null;
- for(let cell of row){
-  let val=String(cell||'').trim();
-  if(AM_NAMES.includes(val)){
-   excelAM=val;
-   break;
-  }
+ let excelAM='';
+ if(Array.isArray(row)){
+   const awValue=String(row[48]||'').trim();
+   if(AM_NAMES.includes(awValue)) excelAM=awValue;
+ }
+ if(!excelAM){
+   for(const cell of (row||[])){
+     const val=String(cell||'').trim();
+     if(AM_NAMES.includes(val)){ excelAM=val; break; }
+   }
  }
  if(excelAM){
-  storeMap.set(branchId,excelAM);
-  idbPut('stores',{BranchId:branchId,originalName:branchId,AM:excelAM});
+   const originalName=originalStoreNames.get(branchId)||branchId;
+   storeMap.set(branchId,excelAM);
+   idbPut('stores',{BranchId:branchId,originalName:originalName,AM:excelAM});
+   return excelAM;
  }
- return excelAM || storeMap.get(branchId) || 'Unassigned';
+ return storeMap.get(branchId) || 'Unassigned';
 }
 </script>
 
@@ -843,7 +848,7 @@ function populateExportDropdown(){
 }
 
 async function loadStoreMap() {
-    // ✅ FORCE NEW SAM ALLOCATIONS (OVERRIDE EXISTING DB VALUES)
+    // Spreadsheet AM updates retained; defaults only used as fallback
     for (const [am, branches] of Object.entries(DEFAULT_AREA_MAPPING)) {
         for (const b of branches) {
             const id = canonicalStoreId(b);
