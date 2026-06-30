@@ -1,58 +1,39 @@
-// ✅ FINAL STABLE SERVICE WORKER (v6 - network-first)
-const CACHE_NAME = 'birds-hub-v6';
-
-const APP_ASSETS = [
+// Birds Executive Hub - Live Master Folder SW
+const CACHE_NAME = 'birds-hub-shell-v1';
+const APP_SHELL = [
   './',
-  './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png',
-  './image_839072.png'
+  './icon-512.png'
 ];
 
-// INSTALL
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(APP_ASSETS);
-    })
-  );
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
-// ACTIVATE (clean old caches)
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      );
-    })
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    ))
   );
   self.clients.claim();
 });
 
-// ✅ NETWORK FIRST (CRITICAL FIX)
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+self.addEventListener('fetch', event => {
+  const req = event.request;
+
+  if (req.method !== 'GET') return;
+
+  if (req.url.includes('index.html')) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
 
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        const responseClone = networkResponse.clone();
-
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
-
-        return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+    fetch(req)
+      .then(response => response)
+      .catch(() => caches.match(req))
   );
 });
