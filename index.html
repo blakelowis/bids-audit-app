@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Birds Executive Hub - Weekly Report Upgrade V1 - v32 Single Source Patch 3 2</title>
+  <title>Birds Executive Hub - v32 Anomaly Protected</title>
   <meta name="theme-color" content="#00A88E">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.png">
@@ -376,7 +376,13 @@ async function exportStoreCardsZip(){
 
 
 // ✅ UPDATED SAM STORE ALLOCATIONS
-// AREA_MANAGER_MAP REMOVED - SOURCE FILE DRIVEN
+const AREA_MANAGER_MAP = {
+  "East Nottinghamshire": ["Bingham","Bulwell","Chilwell","Clifton","Melton Road","Newark","Radcliffe","Ruddington","Southwell","Teal Park","West Bridgford","Wollaton"],
+  "North Midlands": ["Alfreton","Arnold","Beeston","Clay Cross","Ilkeston","Lister Gate","Long Eaton","Mansfield","Mapperley","Sherwood","Sutton","Sutton Lakeside","Victoria Centre"],
+  "North Derbyshire": ["Allenton","Alvaston","Bakery Shop","Belper","Duffield","Eastwood","Heanor","Hucknall","Mackworth","Matlock","Ripley","Spondon"],
+  "Central Derbyshire": ["Albert Street","Ashbourne","Borrowash","Chaddesden","Chellaston","Derbion Crown Walk","Littleover","Melbourne","Mickleover","Oakwood","Park Farm","Sinfin","Uttoxeter"],
+  "South Midlands": ["Anstey","Ashby","Branston","Burton","Coalville","East Leake","Keyworth","Lichfield","Lansdowne Drive","Loughborough","Stretton","Swadlincote","Tamworth"]
+};
 
 </script>
 
@@ -650,11 +656,12 @@ function resolveStoreAM(row, branchId){
      if(AM_NAMES.includes(val)){ excelAM=val; break; }
    }
  }
- 
-if(excelAM){
+ if(excelAM){
+   const originalName=originalStoreNames.get(branchId)||branchId;
+   storeMap.set(branchId,excelAM);
+   idbPut('stores',{BranchId:branchId,originalName:originalName,AM:excelAM});
    return excelAM;
-}
-
+ }
  return storeMap.get(branchId) || 'Unassigned';
 }
 </script>
@@ -768,7 +775,31 @@ function calculateStoreScore(s){
   </div>
 
 <script>
-const DEFAULT_AREA_MAPPING = {}; // disabled
+const DEFAULT_AREA_MAPPING = {
+  'Katie Cartwright': [
+    'Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark',
+    'Radcliffe','Ruddington','Southwell','Teal Park','West Bridgford','Wollaton'
+  ],
+  'Craig White': [
+    'Alfreton','Arnold','Beeston','Clay Cross','Ilkeston','Lister Gate',
+    'Long Eaton','Mansfield','Mapperley','Sherwood','Sutton',
+    'Sutton Lakeside','Victoria Centre'
+  ],
+  'Paul Reeves': [
+    'Allenton','Alvaston','Bakery Shop','Belper','Duffield','Eastwood',
+    'Heanor','Hucknall','Mackworth','Matlock','Ripley','Spondon'
+  ],
+  'Suzanne Green': [
+    'Albert Street','Ashbourne','Borrowash','Chaddesden','Chellaston',
+    'Derbion Crown Walk','Littleover','Melbourne','Mickleover',
+    'Oakwood','Park Farm','Sinfin','Uttoxeter'
+  ],
+  'Thomas Henson': [
+    'Anstey','Ashby','Branston','Burton','Coalville','East Leake',
+    'Keyworth','Lichfield','Lansdowne Drive','Loughborough',
+    'Stretton','Swadlincote','Tamworth'
+  ]
+};
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
 
 let db, currentView = 'overview', latestWkGlobal = 0;
@@ -878,50 +909,62 @@ function populateExportDropdown(){
     });
 }
 
-
 async function loadStoreMap() {
+    // Spreadsheet AM updates retained; defaults only used as fallback
+    for (const [am, branches] of Object.entries(DEFAULT_AREA_MAPPING)) {
+        for (const b of branches) {
+            const id = canonicalStoreId(b);
 
-    storeMap.clear();
-    originalStoreNames.clear();
+            await idbPut('stores', {
+                BranchId: id,
+                originalName: b,
+                AM: am
+            });
+
+            storeMap.set(id, am);
+            originalStoreNames.set(id, b);
+        }
+    }
 
     const stores = await idbGetAll('stores');
-
-    stores.forEach(s => {
-
-        storeMap.set(
-            s.BranchId,
-            s.AM
-        );
-
-        originalStoreNames.set(
-            s.BranchId,
-            s.originalName
-        );
-
-    });
-
+    if (stores.length === 0) {
+        for (const [am, branches] of Object.entries(DEFAULT_AREA_MAPPING)) {
+            for (const b of branches) {
+                let lowerId = canonicalStoreId(b);
+                await idbPut('stores', { BranchId: lowerId, originalName: b, AM: am });
+                storeMap.set(lowerId, am);
+                originalStoreNames.set(lowerId, b);
+            }
+        }
+    } else {
+        stores.forEach(s => {
+            storeMap.set(s.BranchId, s.AM);
+            originalStoreNames.set(s.BranchId, s.originalName);
+        });
+    }
 }
 
-
-
-async function updateStoreAM(){
-
-    alert(
-        "Area Manager allocations are controlled by uploaded source files."
-    );
-
+async function updateStoreAM(branchId, newAM) {
+    const origName = originalStoreNames.get(branchId);
+    await idbPut('stores', { BranchId: branchId, originalName: origName, AM: newAM });
+    storeMap.set(branchId, newAM);
+    if(currentView === 'control') renderDashboard();
 }
 
-
-
-async function addNewStore(){
-
-    alert(
-        "Stores must be supplied from Weekly Performance files."
-    );
-
+async function addNewStore() {
+    const nameInput = document.getElementById('newStoreName').value.trim();
+    const amSelect = document.getElementById('newStoreAM').value;
+    if(!nameInput) return alert("Please enter a store name.");
+    
+    const lowerId = canonicalStoreId(nameInput);
+    await idbPut('stores', { BranchId: lowerId, originalName: nameInput, AM: amSelect });
+    storeMap.set(lowerId, amSelect);
+    originalStoreNames.set(lowerId, nameInput);
+    
+    document.getElementById('newStoreName').value = '';
+    renderDashboard();
+    alert(`Store '${nameInput}' added successfully to ${amSelect}.`);
 }
-
 
 function parseVal(v){
   if(v === undefined || v === null || v === '') return 0;
@@ -1566,27 +1609,16 @@ async function syncData() {
             let rawBranch = cleanStoreName(r[cols.idxB]);
             let branchId = canonicalStoreId(rawBranch);
 // AUTO-REGISTER NEW STORES
-
 if (!storeMap.has(branchId)) {
-
-    const derivedAM =
-        resolveStoreAM(
-            r,
-            branchId
-        );
-
-    storeMap.set(
-        branchId,
-        derivedAM
-    );
-
-    originalStoreNames.set(
-        branchId,
-        rawBranch
-    );
-
+    const defaultAM = 'Unassigned';
+    await idbPut('stores', {
+        BranchId: branchId,
+        originalName: rawBranch,
+        AM: defaultAM
+    });
+    storeMap.set(branchId, defaultAM);
+    originalStoreNames.set(branchId, rawBranch);
 }
-
 
             
             await idbPut('kpi', {
