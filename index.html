@@ -3,74 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Birds Executive Hub - v32 Anomaly Protected</title>
+  <title>Birds Executive Hub v37 - v32 Anomaly Protected</title>
   <meta name="theme-color" content="#00A88E">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon-192.png">
 
   <script>
-
-// ===== SAFE AWARDS & AM INTERCEPTOR =====
-window.dynamicAreaManagers = {};
-window.mockStoreWinnersLog = [];
-window.storeMedalsMap = {};
-
-// 1. Intercept SheetJS to grab the AW column automatically during your folder loop
-if (typeof XLSX !== 'undefined') {
-    const originalSheetToJson = XLSX.utils.sheet_to_json;
-    XLSX.utils.sheet_to_json = function(worksheet, opts) {
-        const data = originalSheetToJson.apply(this, arguments);
-        
-        if (data && data.length > 0) {
-            data.forEach(row => {
-                const rawBranch = row['Branch'] || row['Store'] || "";
-                if (!rawBranch) return;
-                
-                // Harvest Area Manager
-                const am = row['Area Manager'] || row['AM'];
-                if (am) {
-                    window.dynamicAreaManagers[rawBranch] = am;
-                }
-                
-                // Harvest AW Column for awards (e.g., for Mackworth, etc.)
-                const award = row['AW'];
-                if (award && String(award).trim() !== '') {
-                    const week = row['Week'] || window.currentWeek || 0;
-                    const awardStr = String(award).trim();
-                    
-                    // Prevent duplicates if the same file is parsed twice
-                    const isDuplicate = window.mockStoreWinnersLog.some(
-                        w => w.Branch === rawBranch && w.Week === week && w.Metric === awardStr
-                    );
-                    
-                    if (!isDuplicate) {
-                        window.mockStoreWinnersLog.push({
-                            Branch: rawBranch,
-                            Week: week,
-                            Metric: awardStr
-                        });
-                    }
-                }
-            });
-        }
-        return data;
-    };
-}
-
-// 2. Intercept the database call to feed the Hall of Fame directly from the folder upload
-const originalIdbGetAll = window.idbGetAll;
-window.idbGetAll = async function(storeName) {
-    if (storeName === 'store_winners_log') {
-        console.log("Serving YTD Awards directly from the AW column of the uploaded report.");
-        return window.mockStoreWinnersLog;
-    }
-    if (originalIdbGetAll) {
-        return await originalIdbGetAll(storeName);
-    }
-    return [];
-};
-// ========================================
-
 
 // ===== STRICT CHRONOLOGICAL PARSER =====
 // Guarantees data is perfectly ordered regardless of local hard drive read speeds
@@ -194,7 +132,7 @@ function generateSupportiveStoreCard(s, p) {
         { name: "Energy", val: getVal(s, ['Energy']), prev: getVal(p, ['Energy']), inverse: true, isRaw: true, suffix: ' kWh', format: (v) => Math.round(v) },
         { name: "Hot Drinks", val: getVal(s, ['HotBev']), prev: getVal(p, ['HotBev']), inverse: false, isRaw: false },
         { name: "Hot Food", val: getVal(s, ['HotRolls']), prev: getVal(p, ['HotRolls']), inverse: false, isRaw: false },
-        { name: "Filled Rolls", val: getVal(s, ['FilledRolls']), prev: getVal(p, ['FilledRolls']), inverse: false, isRaw: false },
+        { name: "Cold Rolls", val: getVal(s, ['FilledRolls']), prev: getVal(p, ['FilledRolls']), inverse: false, isRaw: false },
         { name: "Sandwiches", val: getVal(s, ['Sandwiches']), prev: getVal(p, ['Sandwiches']), inverse: false, isRaw: false }
     ];
 
@@ -271,7 +209,7 @@ function generateSupportiveStoreCard(s, p) {
     const safeId = "card-" + s.Branch.replace(/[ 	]+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
 
     return `
-      <div id="${safeId}" class="bg-white p-6 rounded-2xl shadow-md flex flex-col gap-4 border border-slate-200 relative mt-4 area-card-export">
+      <div id="${safeId}" class="bg-white p-6 rounded-2xl shadow-md flex flex-col gap-4 border border-slate-200 relative mt-4">
         
         <button onclick="exportToPNG('${safeId}', 'Scorecard_${s.Branch}')" class="export-btn absolute top-6 right-6 bg-slate-100 hover:bg-slate-200 p-2.5 rounded-lg text-slate-600 transition-colors shadow-sm" title="Download as PNG">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -284,7 +222,7 @@ function generateSupportiveStoreCard(s, p) {
                   <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-md shadow-sm">Wk ${weekNum}</span>
               </div>
               <div class="flex items-center gap-2">
-                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${(window.dynamicAreaManagers[s.Branch] || s.AM || 'Store Manager')}
+                  <span class="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">${s.AM || 'Store Manager'}
 ${(window.storeMedalsMap && window.storeMedalsMap[s.Branch]) ? `<div class="mt-2 flex flex-wrap gap-1">${window.storeMedalsMap[s.Branch].map(m=>{const isImp=m.includes('(Improvement)');return `<span class="text-[10px] font-black px-2 py-1 rounded-md border ${isImp?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-amber-50 text-amber-700 border-amber-200'}">${isImp?'📈':'🥇'} ${m.replace(' (Improvement)','')}</span>`}).join('')}</div>`:''}</span>
               </div>
               <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5  px-3 py-1.5 rounded-md border border-emerald-200 w-fit mt-1">
@@ -373,16 +311,6 @@ async function exportStoreCardsZip(){
   a.download = 'store_scorecards.zip';
   a.click();
 }
-
-
-// ✅ UPDATED SAM STORE ALLOCATIONS
-const AREA_MANAGER_MAP = {
-  "East Nottinghamshire": ["Bingham","Bulwell","Chilwell","Clifton","Melton Road","Newark","Radcliffe","Ruddington","Southwell","Teal Park","West Bridgford","Wollaton"],
-  "North Midlands": ["Alfreton","Arnold","Beeston","Clay Cross","Ilkeston","Lister Gate","Long Eaton","Mansfield","Mapperley","Sherwood","Sutton","Sutton Lakeside","Victoria Centre"],
-  "North Derbyshire": ["Allenton","Alvaston","Bakery Shop","Belper","Duffield","Eastwood","Heanor","Hucknall","Mackworth","Matlock","Ripley","Spondon"],
-  "Central Derbyshire": ["Albert Street","Ashbourne","Borrowash","Chaddesden","Chellaston","Derbion Crown Walk","Littleover","Melbourne","Mickleover","Oakwood","Park Farm","Sinfin","Uttoxeter"],
-  "South Midlands": ["Anstey","Ashby","Branston","Burton","Coalville","East Leake","Keyworth","Lichfield","Lansdowne Drive","Loughborough","Stretton","Swadlincote","Tamworth"]
-};
 
 </script>
 
@@ -645,24 +573,19 @@ async function exportStoreCardsZip(){
 
 function resolveStoreAM(row, branchId){
  const AM_NAMES=['Katie Cartwright','Craig White','Paul Reeves','Suzanne Green','Thomas Henson'];
- let excelAM='';
- if(Array.isArray(row)){
-   const awValue=String(row[48]||'').trim();
-   if(AM_NAMES.includes(awValue)) excelAM=awValue;
- }
- if(!excelAM){
-   for(const cell of (row||[])){
-     const val=String(cell||'').trim();
-     if(AM_NAMES.includes(val)){ excelAM=val; break; }
-   }
+ let excelAM=null;
+ for(let cell of row){
+  let val=String(cell||'').trim();
+  if(AM_NAMES.includes(val)){
+   excelAM=val;
+   break;
+  }
  }
  if(excelAM){
-   const originalName=originalStoreNames.get(branchId)||branchId;
-   storeMap.set(branchId,excelAM);
-   idbPut('stores',{BranchId:branchId,originalName:originalName,AM:excelAM});
-   return excelAM;
+  storeMap.set(branchId,excelAM);
+  idbPut('stores',{BranchId:branchId,originalName:branchId,AM:excelAM});
  }
- return storeMap.get(branchId) || 'Unassigned';
+ return excelAM || storeMap.get(branchId) || 'Unassigned';
 }
 </script>
 
@@ -732,7 +655,7 @@ function calculateStoreScore(s){
           <div style="display:none;" class="w-full h-full bg-slate-50 items-center justify-center font-black text-birds-green text-xl rounded-full">B</div>
         </div>
         <div>
-          <h1 class="text-[36px] font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub </h1>
+          <h1 class="text-[36px] font-extrabold outfit birds-green leading-none tracking-tight">Birds Executive Hub v37</h1>
           <div class="flex items-center gap-2 mt-1">
             <span id="activeWeekBadge" class="bg-birds text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">LATEST DATA</span>
             <p id="folderStatus" class="text-slate-500 text-sm italic">Status: Not Anchored</p>
@@ -764,11 +687,13 @@ function calculateStoreScore(s){
       <button onclick="setView('trends')" id="btn-trends" class="seg-btn flex-1 whitespace-nowrap">📈 Trends &amp; Patterns</button>
       <button onclick="setView('areas')" id="btn-areas" class="seg-btn flex-1 whitespace-nowrap">Area Weekly Report</button>
       <button onclick="setView('winners')" id="btn-winners" class="seg-btn flex-1 whitespace-nowrap">Winners Podium</button>
-      <button onclick="setView('leaderboard')" id="btn-leaderboard" class="seg-btn flex-1 whitespace-nowrap">Weekly Leaderboard</button>
+      <button onclick="setView('leaderboard')" id="btn-leaderboard" class="seg-btn flex-1 whitespace-nowrap">Network Leaderboard</button>
       <button onclick="setView('halloffame')" id="btn-halloffame" class="seg-btn flex-1 whitespace-nowrap">🏆 YTD Awards</button>
       <button onclick="setView('control')" id="btn-control" class="seg-btn flex-1 whitespace-nowrap">⚙️ Control Panel</button>
       <button onclick="setView('storecards')" id="btn-storecards" class="seg-btn flex-1 whitespace-nowrap">🏪 Store Scorecards</button>
-      <button onclick="setView('banding')" id="btn-banding" class="seg-btn flex-1 whitespace-nowrap">📊 Financial Banding</button>
+      <button onclick="setView('auditexport')" id="btn-auditexport" class="seg-btn flex-1 whitespace-nowrap">🧾 Audit Action Hub</button>
+      <button onclick="setView('masterreview')" id="btn-masterreview" class="seg-btn flex-1 whitespace-nowrap">📘 Review Pack</button>
+      <button onclick="setView('banding')" id="btn-banding" class="seg-btn flex-1 whitespace-nowrap">📊 Banding</button>
     </nav>
 
     <main id="mainView" class="space-y-6"></main>
@@ -776,29 +701,11 @@ function calculateStoreScore(s){
 
 <script>
 const DEFAULT_AREA_MAPPING = {
-  'Katie Cartwright': [
-    'Bingham','Bulwell','Chilwell','Clifton','Melton Road','Newark',
-    'Radcliffe','Ruddington','Southwell','Teal Park','West Bridgford','Wollaton'
-  ],
-  'Craig White': [
-    'Alfreton','Arnold','Beeston','Clay Cross','Ilkeston','Lister Gate',
-    'Long Eaton','Mansfield','Mapperley','Sherwood','Sutton',
-    'Sutton Lakeside','Victoria Centre'
-  ],
-  'Paul Reeves': [
-    'Allenton','Alvaston','Bakery Shop','Belper','Duffield','Eastwood',
-    'Heanor','Hucknall','Mackworth','Matlock','Ripley','Spondon'
-  ],
-  'Suzanne Green': [
-    'Albert Street','Ashbourne','Borrowash','Chaddesden','Chellaston',
-    'Derbion Crown Walk','Littleover','Melbourne','Mickleover',
-    'Oakwood','Park Farm','Sinfin','Uttoxeter'
-  ],
-  'Thomas Henson': [
-    'Anstey','Ashby','Branston','Burton','Coalville','East Leake',
-    'Keyworth','Lichfield','Lansdowne Drive','Loughborough',
-    'Stretton','Swadlincote','Tamworth'
-  ]
+  'Katie Cartwright': ['Bingham','Bulwell','Bakery Shop','Chilwell','Clifton','Melton Road','Newark','Radcliffe','Ruddington','Southwell','Sherwood','Sutton','Sutton Lakeside','Victoria Centre'],
+  'Craig White': ['Alfreton','Arnold','Beeston','Ilkeston','Lister Gate','Long Eaton','Mansfield','Mapperley','Teal Park','West Bridgford','Wollaton'],
+  'Paul Reeves': ['Allenton','Alvaston','Belper','Duffield','Eastwood','Heanor','Hucknall','Mackworth','Matlock','Ripley','Sinfin','Spondon'],
+  'Suzanne Green': ['Albert Street','Ashbourne','Bakery Shop','Borrowash','Chaddesden','Chellaston','Derbion Crown Walk','Littleover','Melbourne','Mickleover','Oakwood','Park Farm'],
+  'Thomas Henson': ['Anstey','Ashby','Branston','Burton','Coalville','East Leake','Keyworth','Lichfield','Lansdowne Drive','Loughborough','Stretton','Swadlincote','Tamworth','Uttoxeter']
 };
 const AM_LIST = ['Katie Cartwright', 'Craig White', 'Paul Reeves', 'Suzanne Green', 'Thomas Henson', 'Unassigned'];
 
@@ -910,22 +817,6 @@ function populateExportDropdown(){
 }
 
 async function loadStoreMap() {
-    // Spreadsheet AM updates retained; defaults only used as fallback
-    for (const [am, branches] of Object.entries(DEFAULT_AREA_MAPPING)) {
-        for (const b of branches) {
-            const id = canonicalStoreId(b);
-
-            await idbPut('stores', {
-                BranchId: id,
-                originalName: b,
-                AM: am
-            });
-
-            storeMap.set(id, am);
-            originalStoreNames.set(id, b);
-        }
-    }
-
     const stores = await idbGetAll('stores');
     if (stores.length === 0) {
         for (const [am, branches] of Object.entries(DEFAULT_AREA_MAPPING)) {
@@ -1127,9 +1018,7 @@ async function recordPersistentWinnersForWeeks(year, weeks){
     const metrics = [
       { id: 'Sales', order: 'desc' }, { id: 'Product', order: 'desc' },
       { id: 'Waste', order: 'asc' }, { id: 'Labour', order: 'asc' },
-      { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' },
-      { id: 'FilledRolls', order: 'desc' },
-      { id: 'Sandwiches', order: 'desc' }
+      { id: 'ATV', order: 'desc' }, { id: 'Energy', order: 'asc' }
     ];
 
     const areaImprovementPoints = {};
@@ -1652,7 +1541,36 @@ if (!storeMap.has(branchId)) {
                 if(r.Question && r.Status) {
                     let dOpen = parseDateSafe(r.Date); let dClosed = parseDateSafe(r['Closed On']); let daysToClose = null;
                     if(dOpen && dClosed) { daysToClose = (dClosed - dOpen) / (1000 * 60 * 60 * 24); if(daysToClose < 0) daysToClose = 0; }
-                    await idbPut('actions', { Week: sWk, StoreEmail: r['Store Email'], Category: r.Category, Question: r.Question, Status: String(r.Status).toLowerCase(), DaysToClose: daysToClose });
+                    const rawStoreForAction = cleanStoreName(r['Store Name'] || r.Store || r['Data'] || '');
+                    const rawQuestionForAction = normalizeAuditCell(r.Question || '');
+                    const rawStatusForAction = normalizeActionStatus(r.Status || '');
+                    const headerLike = ['store name','data','question','status','sector'].includes(String(rawStoreForAction).toLowerCase()) || ['question',''].includes(rawQuestionForAction.toLowerCase()) || rawStatusForAction === 'Status';
+                    if(headerLike) continue;
+                    await idbPut('actions', {
+                        Week: sWk,
+                        Year: fileYr,
+                        Store: rawStoreForAction,
+                        StoreEmail: r['Store Email'] || '',
+                        Auditor: r.Auditor || '',
+                        Manager: r.Manager || '',
+                        AuditDate: r.Date || '',
+                        AreaManager: r['Area Manager'] || safeGetAM(rawStoreForAction),
+                        Sector: r.Sector || '',
+                        Category: r.Category || '',
+                        QuestionID: r['Question ID'] || '',
+                        Question: r.Question || '',
+                        Answer: normalizeAuditCell(r.Answer),
+                        Description: r.Description || '',
+                        PersonResponsible: r['Person responsible'] || '',
+                        ActionNeeded: r['Action Needed'] || '',
+                        Status: rawStatusForAction,
+                        ClosedOn: r['Closed On'] || '',
+                        HowClosed: r['How action was closed'] || '',
+                        ExtraComment: r['Extra Comment'] || '',
+                        Critical: normalizeYesNo(r.Critical),
+                        DaysToClose: daysToClose,
+                        DaysOpen: dOpen ? Math.max(0, (new Date() - dOpen) / (1000 * 60 * 60 * 24)) : null
+                    });
                 }
             }
         }
@@ -1817,8 +1735,7 @@ async function renderTrendsPanel() {
                     <option value="Energy">Energy (kWh)</option>
                     <option value="HotBev">Hot Drinks %</option>
                     <option value="HotRolls">Hot Food %</option>
-                    <option value="FilledRolls">Filled Rolls %</option>
-                    <option value="Sandwiches">Sandwiches %</option>
+                    <option value="FilledRolls">Cold Rolls %</option>
                     <option value="Audit">Audit Score %</option>
                   </select>
                     <select id="trendScope" onchange="drawTrendChart()" class="input-chip text-sm p-2 w-full md:w-auto">
@@ -1875,7 +1792,7 @@ async function drawTrendChart(storeFilterTriggered = false) {
   if(showCompany){ (metric === 'Audit' ? coAudits.map(a=>a.Week) : coKpis.map(k=>k.Week)).forEach(w => weekSet.add(w)); }
   if(!weekSet.size) return;
   const weeks = Array.from(weekSet).filter(w => w!=null).sort((a,b)=>a-b);
-  const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches','Sandwiches'];
+  const pctMetrics = ['Sales','Product','Waste','Labour','HotBev','HotRolls','FilledRolls','Sandwiches'];
   const valueForWeek = (arr, week, field) => {
     const wk = arr.filter(x => x.Week === week); if(!wk.length) return null;
     if(field === '__AUDIT__'){ const avg = wk.reduce((s,x)=> s + (Number(x.Score) || 0), 0) / wk.length; return Number(avg.toFixed(1)); }
@@ -1893,11 +1810,12 @@ async function drawTrendChart(storeFilterTriggered = false) {
   datasets.push({
     label: 'Company Avg',
     data: companySeries,
-    borderColor: '#1d4ed8',
-    borderDash: [8,6],
-    borderWidth: 3,
+    borderColor: '#2563eb',
+    borderDash: [6,6],
+    borderWidth: 2,
     fill: false,
     pointRadius: 0,
+      borderWidth: 2,
     tension: 0.3,
     spanGaps: true
   });
@@ -1908,7 +1826,6 @@ async function drawTrendChart(storeFilterTriggered = false) {
 trendChartInstance = new Chart(ctx, {
     type: 'line', data: { labels: weeks.map(w => 'Week ' + w), datasets },
     options: {
-      animation: false,
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       onClick: function(evt, elements){ try{ if(elements && elements.length){ const idx = elements[0].index; const wk = weeks[idx]; if(wk){ setArchiveWeekOverride(wk); setView('overview'); } } }catch(e){} },
       scales: { y: { grid: { color: '#e2e8f0' }, ticks: { font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 52, font: { family: 'Inter', weight: 'bold', size: 13 }, color: '#64748b' } } },
@@ -1919,7 +1836,7 @@ trendChartInstance = new Chart(ctx, {
 
 async function exportAllTrendsPNGs(){
   try{
-    const metrics = [ {id:'Sales', name:'Sales_Growth'}, {id:'Product', name:'Product_Target'}, {id:'Waste', name:'Wastage'}, {id:'Labour', name:'Labour'}, {id:'ATV', name:'ATV'}, {id:'Energy', name:'Energy'}, {id:'HotBev', name:'Hot_Drinks'}, {id:'HotRolls', name:'Hot_Food'}, {id:'FilledRolls', name:'Filled_Rolls'}, {id:'Audit', name:'Audit_Score'} ];
+    const metrics = [ {id:'Sales', name:'Sales_Growth'}, {id:'Product', name:'Product_Target'}, {id:'Waste', name:'Wastage'}, {id:'Labour', name:'Labour'}, {id:'ATV', name:'ATV'}, {id:'Energy', name:'Energy'}, {id:'HotBev', name:'Hot_Drinks'}, {id:'HotRolls', name:'Hot_Food'}, {id:'FilledRolls', name:'Cold_Rolls'}, {id:'Audit', name:'Audit_Score'} ];
     const metricSel = document.getElementById('trendMetric'); if(!metricSel){ alert('Trend metric selector not found.'); return; }
     const zip = new JSZip(); const originalMetric = metricSel.value; const waitFrame = () => new Promise(res => requestAnimationFrame(() => res()));
     for(const m of metrics){ metricSel.value = m.id; await drawTrendChart(); await waitFrame(); await new Promise(r => setTimeout(r, 60)); const canvas = document.getElementById('trendCanvas'); if(!canvas || !canvas.toDataURL) continue; const pngBase64 = canvas.toDataURL('image/png').split(',')[1]; zip.file(`${m.name}.png`, pngBase64, {base64:true}); }
@@ -1932,6 +1849,8 @@ async function exportAllTrendsPNGs(){
 
 async function renderDashboard(){
   if(currentView === 'storecards') return renderStoreScorecards();
+  if(currentView === 'auditexport') return renderAuditActionHub();
+  if(currentView === 'masterreview') return renderReviewPack();
   // PRIORITY FIX
   
   if(currentView === 'control') return renderControlPanel();
@@ -2121,7 +2040,7 @@ if(currentView === 'banding') return renderBandingView();
     const kpiCats = [
         { label: 'Hot Food', kw: ['hot', 'roll'], ex: ['bev', 'drink'] },
         { label: 'Hot Drinks', kw: ['hot', 'bev'], ex: null },
-        { label: 'Filled Rolls', kw: ['filled', 'roll'], ex: ['hot'] },
+        { label: 'Cold Rolls', kw: ['filled', 'roll'], ex: ['hot'] },
         { label: 'Sandwiches', kw: ['sandwich'], ex: null }
     ];
 
@@ -2495,7 +2414,7 @@ const cards = list.map(s => {
     document.getElementById('mainView').innerHTML = `
       <div class="flex justify-between items-center mb-6">
       <h2 class="text-[36px] font-black">Store Scorecards</h2>
-      <button onclick="exportStoreCardsZip()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
+      <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors text-sm flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
         Export / Print
       </button>
@@ -2947,186 +2866,8 @@ async function renderBandingView(){
 
 
 <script>
-
-
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Wait 2 seconds to ensure IndexedDB is fully populated by your main app
-    setTimeout(async () => {
-        try {
-            const kpis = await idbGetAll('kpi'); 
-            if (!kpis || kpis.length === 0) return;
-            
-            const branches = [...new Set(kpis.map(k => k.Branch))].filter(Boolean).sort();
-            const select = document.getElementById('dossier-branch-select');
-            branches.forEach(b => {
-                select.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
-            });
-
-            select.addEventListener('change', (e) => {
-                if(e.target.value) renderDossier(e.target.value, kpis);
-            });
-        } catch(e) { console.log('Dossier dropdown error:', e); }
-    }, 2000);
-});
-
-            </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-6 mb-10">
-            <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
-                <div class="text-xs uppercase font-black text-slate-400 mb-2 tracking-wider">Area Manager</div>
-                <div class="text-[36px] font-black text-slate-800">${latest.AM || 'N/A'}</div>
-            </div>
-            <div class="flex gap-4">
-                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 flex-1 text-center">
-                    <div class="text-xs uppercase font-black text-slate-400 mb-2">Network Rank</div>
-                    <div class="text-4xl font-black text-slate-800">#${latest.CompanyRank || '-'}</div>
-                </div>
-                <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 flex-1 text-center">
-                    <div class="text-xs uppercase font-black text-slate-400 mb-2">Sales Band</div>
-                    <div class="text-4xl font-black text-slate-800">${latest.Banding || '-'}</div>
-                </div>
-            </div>
-        </div>
-
-        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">YTD Core Averages (Excluding Anomalies)</h3>
-        <div class="grid grid-cols-3 gap-6 mb-12">
-            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <div class="text-5xl font-black ${avg('Sales') >= 0 ? 'text-emerald-600' : 'text-amber-600'}">${(avg('Sales')*100).toFixed(1)}%</div>
-                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Sales Var</div>
-            </div>
-            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <div class="text-5xl font-black text-slate-700">${(avg('Labour')*100).toFixed(1)}%</div>
-                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Avg Labour</div>
-            </div>
-            <div class="text-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <div class="text-5xl font-black text-slate-700">${(avg('Waste')*100).toFixed(1)}%</div>
-                <div class="text-sm uppercase font-bold text-slate-500 mt-2">Avg Waste</div>
-            </div>
-        </div>
-
-        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">Sales Progression Timeline</h3>
-        <div class="h-80 w-full bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <canvas id="dossier-chart-sales"></canvas>
-        </div>
-        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 1 | Executive Summary</div>
-    </div>
-
-    <div id="dossier-p2" class="dossier-page-container">
-        <div class="border-b-4 border-slate-900 pb-4 mb-8">
-            <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
-            <h2 class="text-[36px] font-black text-slate-900 tracking-tighter">Efficiency & Anomalies</h2>
-        </div>
-
-        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">Labour vs Waste Expenditure Timeline</h3>
-        <div class="h-80 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 mb-12">
-            <canvas id="dossier-chart-ops"></canvas>
-        </div>
-
-        <h3 class="text-lg font-black text-slate-800 border-b border-slate-200 pb-2 mb-6">System Flagged Anomalies</h3>
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 min-h-[200px]">
-            ${storeData.filter(k => k.IsAnomaly).map(k => `
-                <div class="flex items-start gap-4 mb-4 pb-4 border-b border-slate-200 last:border-0">
-                    <div class="bg-rose-100 text-rose-700 p-2 rounded-lg font-black text-xl">⚠️</div>
-                    <div>
-                        <div class="font-black text-slate-800 text-lg">Week ${k.Week} - Quarantined</div>
-                        <div class="text-sm font-medium text-slate-600 mt-1">
-                            Sales dropped by over 80% (Recorded: ${(k.Sales*100).toFixed(1)}%). 
-                            Engine flagged as temporary closure or corrupted file. Removed from YTD averages.
-                        </div>
-                    </div>
-                </div>
-            `).join('') || '<div class="text-center text-emerald-600 font-bold mt-10">✅ Data flow stable. No major anomalies or closures detected YTD.</div>'}
-        </div>
-        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 2 | Operations & Logs</div>
-    </div>
-
-    <div id="dossier-p3" class="dossier-page-container">
-        <div class="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
-            <div>
-                <div class="text-sm font-black tracking-widest text-blue-600 uppercase mb-1">${branch}</div>
-                <h2 class="text-[36px] font-black text-slate-900 tracking-tighter">YTD Data Ledger</h2>
-            </div>
-        </div>
-
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="bg-slate-900 text-white text-xs uppercase tracking-wider">
-                    <th class="p-3 text-center rounded-tl-lg">Week</th>
-                    <th class="p-3">Sales Var</th>
-                    <th class="p-3">Labour</th>
-                    <th class="p-3">Waste</th>
-                    <th class="p-3">AM</th>
-                    <th class="p-3 rounded-tr-lg">System Status</th>
-                </tr>
-            </thead>
-            <tbody>${ledgerRows}</tbody>
-        </table>
-        
-        <div class="mt-8 text-xs text-slate-400 font-bold text-center uppercase tracking-widest">--- End of Report ---</div>
-        <div class="absolute bottom-10 right-10 text-xs font-bold text-slate-400">Page 3 | Full Ledger</div>
-    </div>
-    `;
-
-    document.getElementById('dossier-content').innerHTML = content;
-
-    // Render Charts
-    const ctx1 = document.getElementById('dossier-chart-sales').getContext('2d');
-    if(window.dossierChart1) window.dossierChart1.destroy();
-    window.dossierChart1 = new Chart(ctx1, {
-        type: 'line',
-        data: {
-            labels: storeData.map(d => 'Wk ' + d.Week),
-            datasets: [
-
-        {
-            label: 'Company Average',
-            data: Array(20).fill(45), // Adjust '20' to match the number of weeks/labels on your x-axis
-            borderColor: 'rgba(128, 128, 128, 0.8)', // Grey line
-            borderDash: [5, 5], // This creates the dotted effect
-            borderWidth: 2,
-            pointRadius: 0,
-      borderWidth: 2, // Hides the dots on the line itself
-            fill: false
-        },
-    { 
-                label: 'Sales Variance %', 
-                data: storeData.map(d => d.Sales * 100), 
-                borderColor: '#1d4ed8', backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                borderWidth: 4, tension: 0.3, fill: true
-            }]
-        },
-        options: {
-      animation: false, responsive: true, maintainAspectRatio: false }
-    });
-
-    const ctx2 = document.getElementById('dossier-chart-ops').getContext('2d');
-    if(window.dossierChart2) window.dossierChart2.destroy();
-    window.dossierChart2 = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: storeData.map(d => 'Wk ' + d.Week),
-            datasets: [
-                { label: 'Labour %', data: storeData.map(d => d.Labour * 100), backgroundColor: '#10b981' },
-                { label: 'Waste %', data: storeData.map(d => d.Waste * 100), backgroundColor: '#f59e0b' }
-            ]
-        },
-        options: {
-      animation: false, responsive: true, maintainAspectRatio: false }
-    });
-}
-
-        
-        pdf.save(`Forensic_Dossier_${branch.replace(/\s+/g, '_')}.pdf`);
-    } catch(e) {
-        console.error('PDF Error:', e);
-        alert('Failed to generate PDF. Check console for details.');
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
+// Removed malformed incomplete Store Dossier script block.
+// It contained raw HTML inside JavaScript and called an undefined renderDossier(), which could stop later scripts from loading.
 </script>
 <script>
 // ========= FINAL CLEAN LANDSCAPE + PORTRAIT HYBRID =========
@@ -3173,7 +2914,7 @@ async function drawRankMovementChart(storeName, canvasId) {
   const datasets = [{
     label: 'Rank Position',
     data: ranks,
-    borderColor: '#1d4ed8',
+    borderColor: '#2563eb',
     backgroundColor: 'rgba(37, 99, 235, 0.1)',
     borderWidth: 4,
     fill: true,
@@ -3186,7 +2927,7 @@ async function drawRankMovementChart(storeName, canvasId) {
       label: 'Company Avg Rank',
       data: Array(labels.length).fill(avgRank),
       borderColor: '#94a3b8',
-      borderDash: [8,6],
+      borderDash: [6,6],
       pointRadius: 0,
       borderWidth: 2,
       fill: false
@@ -3197,15 +2938,11 @@ async function drawRankMovementChart(storeName, canvasId) {
     type: 'line',
     data: { labels, datasets },
     options: {
-      animation: false,
       responsive: false,
       plugins: { legend: { display: true } },
       scales: {
         y: {
           reverse: true,
-        min: Math.max(1, Math.min(...ranks) - 3),
-        max: Math.max(...ranks) + 3,
-
           ticks: { stepSize: 1 },
           title: { display: true, text: 'Rank' }
         },
@@ -3515,5 +3252,383 @@ async function exportFullStoreReport() {
     pdf.save('Store_Report_' + storeName.replace(/\s+/g, '_') + '.pdf');
 }
 </script>
+</body>
+</html>
+
+<script>
+// ===== AUDIT ACTION HUB PRO =====
+// Advanced filters, drill-downs, SLA flags and structured PDF export.
+let __auditHubCache = [];
+let __auditHubCurrentRows = [];
+let __auditHubSort = { key: 'risk', dir: 'desc' };
+
+function escapeHtml(v){ return String(v ?? '').replace(/[&<>'"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+function normalizeAuditCell(v){
+  if(v === undefined || v === null) return '';
+  let s = String(v).trim();
+  try { if(s.startsWith('[')) { const parsed = JSON.parse(s.replace(/'/g, '"')); if(Array.isArray(parsed)) return parsed.join(', '); } } catch(e) {}
+  return s.replace(/^\["?|"?\]$/g, '').replace(/"/g, '').replace(/Â/g, '').replace(/â€™/g, "'").replace(/â/g, '').trim();
+}
+function normalizeActionStatus(v){ const s = normalizeAuditCell(v).toLowerCase(); if(s.includes('closed')) return 'Closed'; if(s.includes('open')) return 'Open'; if(s === 'status') return 'Status'; return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Open'; }
+function normalizeYesNo(v){ const s = normalizeAuditCell(v).toLowerCase(); return (s === 'yes' || s === 'y' || s === 'true' || s === 'critical') ? 'Yes' : 'No'; }
+function actionStoreName(a){ return cleanStoreName(a.Store || a['Store Name'] || a.StoreName || (a.StoreEmail ? String(a.StoreEmail).split('@')[0] : '') || 'Unknown Store'); }
+function actionAreaName(a){ const store = actionStoreName(a); const area = a.AreaManager || a.AM || safeGetAM(store) || 'Unassigned'; return area === 'Area Manager' ? safeGetAM(store) : area; }
+function actionSectorName(a){ return normalizeAuditCell(a.Sector) || 'Uncategorised'; }
+function actionCategoryName(a){ return normalizeAuditCell(a.Category) || 'Uncategorised'; }
+function actionIsClosed(a){ return normalizeActionStatus(a.Status) === 'Closed'; }
+function actionIsCritical(a){ return normalizeYesNo(a.Critical) === 'Yes'; }
+function fmtDays(v){ const n = Number(v); return Number.isFinite(n) ? (Math.round(n * 10) / 10).toString() : '—'; }
+function pct(part, total){ return total ? Math.round((part / total) * 1000) / 10 : 0; }
+function countBy(arr, fn){ const m = new Map(); arr.forEach(x => { const k = fn(x) || 'Unknown'; m.set(k, (m.get(k)||0)+1); }); return Array.from(m.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]))); }
+function buildStatusBreakdown(arr, keyFn){
+  const m = new Map();
+  arr.forEach(a => {
+    const k = keyFn(a) || 'Unknown';
+    if(!m.has(k)) m.set(k, {name:k, open:0, closed:0, critical:0, total:0});
+    const o = m.get(k); o.total++;
+    if(actionIsClosed(a)) o.closed++; else o.open++;
+    if(actionIsCritical(a)) o.critical++;
+  });
+  return Array.from(m.values()).sort((a,b)=>b.open-a.open || b.total-a.total || a.name.localeCompare(b.name));
+}
+function auditDateValue(a){ return parseDateSafe(a.AuditDate || a.Date || a.auditDate); }
+function closedDateValue(a){ return parseDateSafe(a.ClosedOn || a['Closed On']); }
+function daysOpenNow(a){ if(actionIsClosed(a)) return Number(a.DaysToClose); const d = auditDateValue(a); return d ? Math.max(0, (new Date() - d) / 86400000) : Number(a.DaysOpen); }
+function riskScore(a){ let score = 0; if(!actionIsClosed(a)) score += 20; if(actionIsCritical(a)) score += 30; const d = daysOpenNow(a); if(Number.isFinite(d)) score += Math.min(50, d); return score; }
+function slaBucket(a){
+  if(actionIsClosed(a)) return 'Closed';
+  const d = daysOpenNow(a);
+  if(actionIsCritical(a) && Number.isFinite(d) && d > 2) return 'Critical > 48h';
+  if(Number.isFinite(d) && d > 30) return 'Open > 30 days';
+  if(Number.isFinite(d) && d > 14) return 'Open > 14 days';
+  if(Number.isFinite(d) && d > 7) return 'Open > 7 days';
+  return 'In SLA / New';
+}
+function closureQuality(a){
+  if(!actionIsClosed(a)) return 'Open';
+  const h = normalizeAuditCell(a.HowClosed || '');
+  const c = normalizeAuditCell(a.ExtraComment || '');
+  if(!h && !c) return 'Closed - no comment';
+  if((h + ' ' + c).length < 12) return 'Closed - short comment';
+  return 'Closed - comment added';
+}
+function auditIssueTheme(a){
+  const text = [a.Question, a.Description, a.ActionNeeded, a.Category, a.Sector].map(x => normalizeAuditCell(x).toLowerCase()).join(' ').replace(/\u00a0/g, ' ');
+  if(/hair\s*net|hairnet|garnet|hair covering|hair coverings/.test(text)) return 'Hairnets / hair coverings not worn';
+  if(/probe.*calibrat|calibrat.*probe|test caps/.test(text)) return 'Probe calibration overdue / missing';
+  if(/scale.*calibrat|calibrat.*scale|shop scales|scales recorded/.test(text)) return 'Scale calibration / scales issue';
+  if(/out of date|use by|use-by|date checking|stock rotated|stock rotation|unlabelled|unlabeled|labelled|labeled|labelling|labeling|day opened|date label/.test(text)) return 'Out of date / stock rotation / labelling';
+  if(/multiplug|multi plug|extension lead|extension leads|adaptors|adapter/.test(text)) return 'Multiplugs / extension leads in use';
+  if(/emergency lighting|emergency light|exit sign|fire exit signs|illuminated|zone map/.test(text)) return 'Emergency lighting / exit signage issues';
+  if(/fire alarm|detection|call point|alarm system|fire safety checks|flick test/.test(text)) return 'Fire alarm / detection system issues';
+  if(/fire door|fire doors|fire exit door|escape routes|escape route|obstruction|opened immediately|push bar|wedged open|propped open/.test(text)) return 'Fire doors / escape routes issues';
+  if(/glass breakage|glass clean/.test(text)) return 'Glass breakage kit missing';
+  if(/opening time|opening hours/.test(text)) return 'Opening times signage missing';
+  if(/\bbin\b|\bbins\b|lidded/.test(text)) return 'Bins / waste containers need lids';
+  const fallback = normalizeAuditCell(a.Description) || normalizeAuditCell(a.Question) || normalizeAuditCell(a.ActionNeeded);
+  return fallback || 'Uncategorised';
+}
+function sameQuestionKey(a){ return normalizeAuditCell(a.Question) || normalizeAuditCell(a.QuestionID) || auditIssueTheme(a); }
+function shortQuestionLabel(q, maxLen=96){
+  const s = normalizeAuditCell(q);
+  return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
+}
+
+async function getAuditActionsForReport(){
+  const raw = await idbGetAll('actions');
+  return (raw || []).map(a => {
+    const obj = {
+      ...a,
+      Store: actionStoreName(a), AreaManager: actionAreaName(a), Sector: actionSectorName(a), Category: actionCategoryName(a),
+      Status: normalizeActionStatus(a.Status), Critical: normalizeYesNo(a.Critical), Question: normalizeAuditCell(a.Question || ''),
+      Description: normalizeAuditCell(a.Description || ''), ActionNeeded: normalizeAuditCell(a.ActionNeeded || a['Action Needed'] || ''),
+      PersonResponsible: normalizeAuditCell(a.PersonResponsible || a['Person responsible'] || ''),
+      AuditDate: a.AuditDate || a.Date || '', ClosedOn: a.ClosedOn || a['Closed On'] || '',
+      QuestionID: normalizeAuditCell(a.QuestionID || ''), Answer: normalizeAuditCell(a.Answer || ''),
+      HowClosed: normalizeAuditCell(a.HowClosed || ''), ExtraComment: normalizeAuditCell(a.ExtraComment || '')
+    };
+    obj.IssueTheme = auditIssueTheme(obj);
+    obj.SLABucket = slaBucket(obj);
+    obj.ClosureQuality = closureQuality(obj);
+    obj.RiskScore = riskScore(obj);
+    return obj;
+  }).filter(a => {
+    const s = String(a.Store || '').toLowerCase();
+    const q = String(a.Question || '').toLowerCase();
+    if(['store name','data','question','status','sector'].includes(s)) return false;
+    if(q === 'question' || !q) return false;
+    return true;
+  });
+}
+function getHubDateRange(period){
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const startPrevMonth = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const endPrevMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+  const qStartMonth = Math.floor(today.getMonth()/3)*3;
+  const startQuarter = new Date(today.getFullYear(), qStartMonth, 1);
+  const startYear = new Date(today.getFullYear(), 0, 1);
+  const minusDays = d => new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
+  if(period === 'last7') return {from: minusDays(7), to: today};
+  if(period === 'last30') return {from: minusDays(30), to: today};
+  if(period === 'mtd') return {from: startOfMonth, to: today};
+  if(period === 'prevmonth') return {from: startPrevMonth, to: endPrevMonth};
+  if(period === 'qtd') return {from: startQuarter, to: today};
+  if(period === 'ytd') return {from: startYear, to: today};
+  if(period === 'custom') {
+    const f = parseDateSafe(document.getElementById('auditFromDate')?.value); const t = parseDateSafe(document.getElementById('auditToDate')?.value);
+    return {from:f, to:t};
+  }
+  return {from:null, to:null};
+}
+function applyAuditHubFilters(actions){
+  const area = document.getElementById('auditAreaFilter')?.value || 'ALL';
+  const sector = document.getElementById('auditSectorFilter')?.value || 'ALL';
+  const category = document.getElementById('auditCategoryFilter')?.value || 'ALL';
+  const store = document.getElementById('auditStoreFilter')?.value || 'ALL';
+  const status = document.getElementById('auditStatusFilter')?.value || 'ALL';
+  const critical = document.getElementById('auditCriticalFilter')?.value || 'ALL';
+  const theme = document.getElementById('auditThemeFilter')?.value || 'ALL';
+  const sla = document.getElementById('auditSlaFilter')?.value || 'ALL';
+  const period = document.getElementById('auditPeriodFilter')?.value || 'all';
+  const {from, to} = getHubDateRange(period);
+  const q = (document.getElementById('auditSearch')?.value || '').toLowerCase().trim();
+  return actions.filter(a => {
+    if(area !== 'ALL' && a.AreaManager !== area) return false;
+    if(sector !== 'ALL' && a.Sector !== sector) return false;
+    if(category !== 'ALL' && a.Category !== category) return false;
+    if(store !== 'ALL' && a.Store !== store) return false;
+    if(status !== 'ALL' && a.Status !== status) return false;
+    if(critical !== 'ALL' && a.Critical !== critical) return false;
+    if(theme !== 'ALL' && a.IssueTheme !== theme) return false;
+    if(sla !== 'ALL' && a.SLABucket !== sla) return false;
+    const d = auditDateValue(a);
+    if(from && (!d || d < from)) return false;
+    if(to && (!d || d > new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23,59,59))) return false;
+    if(q){ const blob = [a.Store,a.AreaManager,a.Sector,a.Category,a.Question,a.Description,a.ActionNeeded,a.PersonResponsible,a.Status,a.Critical,a.IssueTheme,a.HowClosed,a.ExtraComment].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
+    return true;
+  });
+}
+function sortAuditRows(rows){
+  const {key, dir} = __auditHubSort; const mult = dir === 'asc' ? 1 : -1;
+  return rows.slice().sort((a,b) => {
+    let av, bv;
+    if(key === 'risk'){ av = a.RiskScore; bv = b.RiskScore; }
+    else if(key === 'days'){ av = Number(daysOpenNow(a)); bv = Number(daysOpenNow(b)); }
+    else { av = String(a[key] || ''); bv = String(b[key] || ''); return av.localeCompare(bv) * mult; }
+    av = Number.isFinite(av) ? av : -1; bv = Number.isFinite(bv) ? bv : -1; return (av-bv) * mult;
+  });
+}
+function setAuditSort(key){ if(__auditHubSort.key === key) __auditHubSort.dir = __auditHubSort.dir === 'asc' ? 'desc' : 'asc'; else __auditHubSort = {key, dir:'desc'}; refreshAuditHubBody(); }
+function hubKpi(label, value, sub='', colour='birds-green'){
+  return `<div class="card p-5 border-t-4 ${colour==='red'?'border-t-red-500':colour==='amber'?'border-t-amber-400':'border-t-birds-green'}"><div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${label}</div><div class="text-3xl font-black ${colour==='red'?'text-red-600':colour==='amber'?'text-amber-600':'birds-green'}">${value}</div><div class="text-xs font-bold text-slate-500 mt-1">${sub}</div></div>`;
+}
+function breakdownHtml(title, rows, clickType){
+  return `<div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">${title}</h3>${rows.length ? rows.map(x=>`<button class="w-full text-left mb-3 hover:bg-slate-50 rounded-lg p-1" onclick="auditDrilldown('${clickType}','${encodeURIComponent(x.name)}')"><div class="flex justify-between text-xs font-black"><span>${escapeHtml(x.name)}</span><span>${x.open} open / ${x.closed} closed</span></div><div class="progress-bar mt-1"><div class="progress-fill-warn" style="width:${pct(x.open,x.total)}%"></div></div></button>`).join('') : '<p class="text-slate-400 italic">No data.</p>'}</div>`;
+}
+function tooltipTitle(a){ return escapeHtml(`Question: ${a.Question}\nClosed comment: ${a.HowClosed || '—'}\nExtra comment: ${a.ExtraComment || '—'}`); }
+async function renderAuditActionHub(){
+  __auditHubCache = await getAuditActionsForReport();
+  if(!__auditHubCache.length){ document.getElementById('mainView').innerHTML = `<div class="card p-12 text-center"><h2 class="text-3xl font-black outfit birds-green mb-2">Audit Action Hub</h2><p class="text-slate-500 font-bold mb-4">No audit actions are loaded yet. Click <b>Refresh Data</b> after anchoring your master folder.</p></div>`; return; }
+  const areas = [...new Set(__auditHubCache.map(a=>a.AreaManager))].sort();
+  const sectors = [...new Set(__auditHubCache.map(a=>a.Sector))].sort();
+  const categories = [...new Set(__auditHubCache.map(a=>a.Category))].sort();
+  const stores = [...new Set(__auditHubCache.map(a=>a.Store))].sort();
+  const themes = [...new Set(__auditHubCache.map(a=>a.IssueTheme))].sort();
+  const slas = ['Critical > 48h','Open > 30 days','Open > 14 days','Open > 7 days','In SLA / New','Closed'];
+  document.getElementById('mainView').innerHTML = `<div id="audit-export-card" class="space-y-6"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><h2 class="text-[36px] font-black outfit birds-green uppercase tracking-tight">🧾 Audit Action Hub</h2><p class="text-slate-500 font-bold">Time filters, SLA flags, issue drill-down and closure evidence review.</p></div><div class="flex flex-wrap gap-2 audit-export-controls"><button onclick="exportAuditActions('filtered')" class="btn-primary">⬇️ Export Current Filter</button><button onclick="exportAuditActions('full')" class="btn-secondary">📦 Full Export</button><button onclick="exportAuditPDF()" class="btn-secondary">📄 PDF Summary</button><button onclick="exportAuditClosurePDF()" class="btn-secondary">📑 Closure Detail PDF</button></div></div>
+    <div class="card p-5 audit-export-controls"><div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3"><select id="auditPeriodFilter" onchange="toggleAuditCustomDates();refreshAuditHubBody()" class="input-chip text-sm"><option value="all">All dates</option><option value="last7">Last 7 days</option><option value="last30">Last 30 days</option><option value="mtd">Month to date</option><option value="prevmonth">Previous month</option><option value="qtd">Quarter to date</option><option value="ytd">Year to date</option><option value="custom">Custom dates</option></select><select id="auditAreaFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Areas</option>${areas.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}</select><select id="auditSectorFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Sectors</option>${sectors.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select><select id="auditCategoryFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Categories</option>${categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select><select id="auditStoreFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Stores</option>${stores.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select><select id="auditStatusFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">Open & Closed</option><option value="Open">Open</option><option value="Closed">Closed</option></select><select id="auditCriticalFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Criticality</option><option value="Yes">Critical only</option><option value="No">Non-critical only</option></select><select id="auditSlaFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All SLA</option>${slas.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3"><select id="auditThemeFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Issue Themes</option>${themes.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select><input id="auditSearch" oninput="refreshAuditHubBody()" class="input-chip text-sm" placeholder="Search issue, question, closure comment..." /><div id="auditCustomDates" class="hidden grid grid-cols-2 gap-2"><input id="auditFromDate" type="date" onchange="refreshAuditHubBody()" class="input-chip text-sm"/><input id="auditToDate" type="date" onchange="refreshAuditHubBody()" class="input-chip text-sm"/></div></div></div><div id="auditReportBody" class="space-y-6"></div><div id="auditDrilldownPanel" class="hidden"></div></div>`;
+  refreshAuditHubBody();
+}
+function toggleAuditCustomDates(){ const box = document.getElementById('auditCustomDates'); if(box) box.classList.toggle('hidden', (document.getElementById('auditPeriodFilter')?.value || 'all') !== 'custom'); }
+async function refreshAuditHubBody(){
+  const filtered = sortAuditRows(applyAuditHubFilters(__auditHubCache)); __auditHubCurrentRows = filtered;
+  const total = filtered.length, open = filtered.filter(a=>!actionIsClosed(a)).length, closed = filtered.filter(actionIsClosed).length, critical = filtered.filter(actionIsCritical).length;
+  const overdueCritical = filtered.filter(a=>slaBucket(a)==='Critical > 48h').length;
+  const noCloseComment = filtered.filter(a=>closureQuality(a)==='Closed - no comment').length;
+  const avgClose = (()=>{ const vals=filtered.filter(actionIsClosed).map(a=>Number(a.DaysToClose)).filter(Number.isFinite); return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '—'; })();
+  const themes = countBy(filtered, a=>a.IssueTheme).slice(0,10);
+  const questions = countBy(filtered, sameQuestionKey).slice(0,10);
+  const areaBreak = buildStatusBreakdown(filtered, a=>a.AreaManager).slice(0,10);
+  const sectorBreak = buildStatusBreakdown(filtered, a=>a.Sector).slice(0,10);
+  const storeBreak = buildStatusBreakdown(filtered, a=>a.Store).slice(0,15);
+  const slaCounts = countBy(filtered, slaBucket);
+  const rows = filtered.map(a=>`<tr class="border-b border-slate-100 align-top hover:bg-slate-50"><td class="p-3 font-black text-slate-700">${escapeHtml(a.Store)}</td><td class="p-3 text-slate-500 font-bold">${escapeHtml(a.AreaManager)}</td><td class="p-3 text-xs font-bold text-slate-500">${escapeHtml(a.Sector)}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-[10px] font-black ${actionIsClosed(a)?'bg-emerald-50 text-emerald-700':'bg-amber-50 text-amber-700'}">${escapeHtml(a.Status)}</span></td><td class="p-3"><span class="px-2 py-1 rounded-full text-[10px] font-black ${actionIsCritical(a)?'bg-red-50 text-red-700':'bg-slate-100 text-slate-500'}">${actionIsCritical(a)?'Critical':'No'}</span></td><td class="p-3"><button onclick="auditDrilldown('sla','${encodeURIComponent(a.SLABucket)}')" class="text-[10px] font-black px-2 py-1 rounded-full ${a.SLABucket.includes('Critical')?'bg-red-50 text-red-700':a.SLABucket.includes('Open >')?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-600'}">${escapeHtml(a.SLABucket)}</button></td><td class="p-3 text-xs text-slate-700 max-w-[420px]" title="${tooltipTitle(a)}"><button class="text-left hover:underline font-black" onclick="showAuditActionDetail(${a.ActionID || 0})">${escapeHtml(a.Description || a.Question)}</button><div class="text-slate-500 mt-1">${escapeHtml(a.ActionNeeded)}</div><button onclick="auditDrilldown('theme','${encodeURIComponent(a.IssueTheme)}')" class="text-[10px] font-black text-slate-400 mt-1 hover:text-birds-green">${escapeHtml(a.IssueTheme)}</button></td><td class="p-3 text-xs text-slate-600">${escapeHtml(a.PersonResponsible || '—')}</td><td class="p-3 text-xs font-black text-slate-700">${actionIsClosed(a) ? fmtDays(a.DaysToClose) : fmtDays(daysOpenNow(a))}</td></tr>`).join('');
+  document.getElementById('auditReportBody').innerHTML = `<div class="grid grid-cols-1 md:grid-cols-6 gap-4">${hubKpi('Actions', total, 'current filter')}${hubKpi('Open', `${pct(open,total)}%`, `${open} actions`, 'amber')}${hubKpi('Closed', `${pct(closed,total)}%`, `${closed} actions`)}${hubKpi('Critical', critical, `${pct(critical,total)}%`, critical?'red':'birds-green')}${hubKpi('Critical > 48h', overdueCritical, 'needs escalation', overdueCritical?'red':'birds-green')}${hubKpi('Avg Close Time', avgClose, 'days closed')}</div><div class="grid grid-cols-1 xl:grid-cols-5 gap-6"><div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">Most common issue themes</h3>${themes.map(([n,c])=>`<button class="flex justify-between gap-3 py-2 border-b border-slate-100 last:border-0 w-full text-left hover:bg-slate-50" onclick="auditDrilldown('theme','${encodeURIComponent(n)}')"><span class="text-xs font-bold text-slate-700">${escapeHtml(n)}</span><span class="font-black birds-green">${c}</span></button>`).join('') || '<p class="text-slate-400 italic">No matching actions.</p>'}</div><div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">Question drill-down</h3>${questions.map(([n,c])=>`<button class="flex justify-between gap-3 py-2 border-b border-slate-100 last:border-0 w-full text-left hover:bg-slate-50" onclick="auditDrilldown('question','${encodeURIComponent(n)}')"><span class="text-xs font-bold text-slate-700 line-clamp-2" title="${escapeHtml(n)}">${escapeHtml(shortQuestionLabel(n))}</span><span class="font-black birds-green">${c}</span></button>`).join('') || '<p class="text-slate-400 italic">No questions.</p>'}</div>${breakdownHtml('SLA / overdue flags', slaCounts.map(([name,total])=>({name,total,open:filtered.filter(a=>slaBucket(a)===name && !actionIsClosed(a)).length,closed:filtered.filter(a=>slaBucket(a)===name && actionIsClosed(a)).length})), 'sla')}${breakdownHtml('Sector open vs closed', sectorBreak, 'sector')}${breakdownHtml('Store open vs closed', storeBreak, 'store')}</div><div class="grid grid-cols-1 lg:grid-cols-2 gap-6">${breakdownHtml('Area open vs closed', areaBreak, 'area')}<div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">Closure quality</h3>${countBy(filtered, closureQuality).map(([n,c])=>`<button class="flex justify-between gap-3 py-2 border-b border-slate-100 last:border-0 w-full text-left hover:bg-slate-50" onclick="auditDrilldown('closure','${encodeURIComponent(n)}')"><span class="text-xs font-bold text-slate-700">${escapeHtml(n)}</span><span class="font-black birds-green">${c}</span></button>`).join('')}</div></div><div class="card overflow-hidden"><div class="p-5 flex flex-wrap gap-3 justify-between items-center border-b border-slate-100"><h3 class="font-black outfit text-xl birds-green">Action Detail</h3><div class="flex flex-wrap gap-2 audit-export-controls"><button onclick="setAuditSort('risk')" class="export-btn">Sort Risk</button><button onclick="setAuditSort('days')" class="export-btn">Sort Days</button><button onclick="setAuditSort('Store')" class="export-btn">Sort Store</button><span class="text-xs font-black text-slate-400 px-2 py-1">${total} rows • missing closure comments: ${noCloseComment}</span></div></div><div class="overflow-x-auto max-h-[760px] overflow-y-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 sticky top-0 z-10"><tr><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Store</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Area</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Sector</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Status</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Critical</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">SLA</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Action / Issue</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Responsible</th><th class="p-3 text-[10px] uppercase text-slate-500 font-black">Days</th></tr></thead><tbody>${rows || '<tr><td colspan="9" class="p-8 text-center text-slate-400 font-bold">No matching actions.</td></tr>'}</tbody></table></div></div>`;
+}
+function auditDrilldown(type, encodedValue){
+  const val = decodeURIComponent(encodedValue || '');
+  let rows = __auditHubCurrentRows.filter(a => type==='theme'?a.IssueTheme===val:type==='question'?sameQuestionKey(a)===val:type==='sla'?a.SLABucket===val:type==='sector'?a.Sector===val:type==='store'?a.Store===val:type==='area'?a.AreaManager===val:closureQuality(a)===val);
+  renderAuditDrilldownPanel(`${type.toUpperCase()}: ${val}`, rows);
+}
+function renderAuditDrilldownPanel(title, rows){
+  const panel = document.getElementById('auditDrilldownPanel'); if(!panel) return;
+  panel.className = 'card p-6';
+  panel.innerHTML = `<div class="flex justify-between items-start gap-4 mb-4"><div><h3 class="text-2xl font-black outfit birds-green">${escapeHtml(title)}</h3><p class="text-sm font-bold text-slate-500">${rows.length} actions. Click an action to view closure evidence.</p></div><button onclick="document.getElementById('auditDrilldownPanel').className='hidden'" class="btn-secondary">Close</button></div><div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${rows.map(a=>`<button onclick="showAuditActionDetail(${a.ActionID || 0})" class="text-left p-4 rounded-xl border border-slate-200 hover:bg-slate-50"><div class="flex justify-between items-center mb-2"><span class="font-black text-slate-800">${escapeHtml(a.Store)}</span><span class="text-[10px] font-black ${actionIsClosed(a)?'text-emerald-600':'text-amber-600'}">${escapeHtml(a.Status)}</span></div><div class="text-xs font-bold text-slate-500 mb-2">${escapeHtml(a.Sector)} • ${escapeHtml(a.Category)} • ${escapeHtml(a.SLABucket)}</div><div class="font-bold text-sm text-slate-700 line-clamp-3">${escapeHtml(a.Description || a.Question)}</div><div class="mt-2 text-xs text-slate-500"><b>Closed:</b> ${escapeHtml(a.HowClosed || '—')}</div><div class="text-xs text-slate-500"><b>Days:</b> ${actionIsClosed(a)?fmtDays(a.DaysToClose):fmtDays(daysOpenNow(a))}</div></button>`).join('')}</div>`;
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function showAuditActionDetail(actionId){
+  const a = __auditHubCache.find(x => String(x.ActionID) === String(actionId)) || __auditHubCurrentRows.find(x => String(x.ActionID) === String(actionId)); if(!a) return;
+  renderAuditDrilldownPanel(`ACTION DETAIL: ${a.Store}`, [a]);
+  const panel = document.getElementById('auditDrilldownPanel');
+  panel.innerHTML = `<div class="flex justify-between items-start gap-4 mb-4"><div><h3 class="text-2xl font-black outfit birds-green">${escapeHtml(a.Store)} • ${escapeHtml(a.IssueTheme)}</h3><p class="text-sm font-bold text-slate-500">${escapeHtml(a.AreaManager)} • ${escapeHtml(a.Sector)} • ${escapeHtml(a.Category)}</p></div><button onclick="document.getElementById('auditDrilldownPanel').className='hidden'" class="btn-secondary">Close</button></div><div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">${hubKpi('Status', a.Status, a.Critical==='Yes'?'Critical':'Non-critical', actionIsClosed(a)?'birds-green':'amber')}${hubKpi('SLA', a.SLABucket, 'current state', a.SLABucket.includes('Critical')?'red':'amber')}${hubKpi('Days', actionIsClosed(a)?fmtDays(a.DaysToClose):fmtDays(daysOpenNow(a)), actionIsClosed(a)?'to close':'open')}${hubKpi('Closure Quality', a.ClosureQuality, '', a.ClosureQuality.includes('no')?'red':'birds-green')}</div><div class="grid grid-cols-1 lg:grid-cols-2 gap-5"><div class="card p-5"><h4 class="font-black text-slate-400 uppercase text-xs mb-3">Question / Issue</h4><p class="font-black text-slate-800 mb-3">${escapeHtml(a.Question)}</p><p class="text-sm text-slate-700 mb-3"><b>Description:</b> ${escapeHtml(a.Description || '—')}</p><p class="text-sm text-slate-700"><b>Action needed:</b> ${escapeHtml(a.ActionNeeded || '—')}</p></div><div class="card p-5"><h4 class="font-black text-slate-400 uppercase text-xs mb-3">Closure Evidence</h4><p class="text-sm text-slate-700 mb-3"><b>Closed on:</b> ${escapeHtml(a.ClosedOn || '—')}</p><p class="text-sm text-slate-700 mb-3"><b>How closed:</b> ${escapeHtml(a.HowClosed || '—')}</p><p class="text-sm text-slate-700"><b>Extra comment:</b> ${escapeHtml(a.ExtraComment || '—')}</p></div></div>`;
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function auditRowsForExport(mode){ return mode === 'full' ? __auditHubCache : __auditHubCurrentRows; }
+async function exportAuditActions(mode='filtered'){
+  const data = auditRowsForExport(mode);
+  const rows = data.map(a => ({ 'Area Manager': a.AreaManager, 'Store': a.Store, 'Sector': a.Sector, 'Category': a.Category, 'Issue Theme': a.IssueTheme, 'SLA Bucket': a.SLABucket, 'Closure Quality': a.ClosureQuality, 'Audit Date': a.AuditDate || '', 'Question ID': a.QuestionID || '', 'Question': a.Question || '', 'Answer': a.Answer || '', 'Description': a.Description || '', 'Person Responsible': a.PersonResponsible || '', 'Action Needed': a.ActionNeeded || '', 'Status': a.Status, 'Critical': a.Critical, 'Closed On': a.ClosedOn || '', 'Days To Close': actionIsClosed(a) ? fmtDays(a.DaysToClose) : '', 'Days Open': !actionIsClosed(a) ? fmtDays(daysOpenNow(a)) : '', 'How Closed': a.HowClosed || '', 'Extra Comment': a.ExtraComment || '' }));
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Audit Actions'); const stamp = new Date().toISOString().slice(0,10); XLSX.writeFile(wb, `Birds_Audit_Actions_${mode}_${stamp}.xlsx`);
+}
+function pdfClean(s){ return String(s ?? '').replace(/\s+/g,' ').trim(); }
+function drawPdfHeader(pdf, title, subtitle){ pdf.setFillColor(0,168,142); pdf.rect(0,0,297,18,'F'); pdf.setTextColor(255,255,255); pdf.setFontSize(16); pdf.setFont(undefined,'bold'); pdf.text(title, 10, 11); pdf.setFontSize(8); pdf.setFont(undefined,'normal'); pdf.text(subtitle, 10, 16); pdf.setTextColor(15,23,42); }
+function pdfLine(pdf, text, x, y, maxW, size=8, style='normal'){ pdf.setFontSize(size); pdf.setFont(undefined, style); const lines = pdf.splitTextToSize(pdfClean(text), maxW); pdf.text(lines, x, y); return y + (lines.length * (size*0.38)) + 1.5; }
+function pdfEnsure(pdf, y, needed=20){ if(y+needed > 200){ pdf.addPage(); drawPdfHeader(pdf,'Audit Action Hub','continued'); return 26; } return y; }
+async function exportAuditPDF(){
+  const rows = __auditHubCurrentRows || []; if(!rows.length){ alert('No rows to export.'); return; }
+  if(typeof window.jspdf === 'undefined'){ alert('PDF library is still loading, please try again.'); return; }
+  const { jsPDF } = window.jspdf; const pdf = new jsPDF('l','mm','a4'); const stamp = new Date().toISOString().slice(0,10);
+  drawPdfHeader(pdf, 'Birds Audit Action Hub', `Summary export • ${rows.length} filtered actions • ${stamp}`);
+  let y = 28; const total=rows.length, open=rows.filter(a=>!actionIsClosed(a)).length, closed=rows.filter(actionIsClosed).length, critical=rows.filter(actionIsCritical).length, overdue=rows.filter(a=>a.SLABucket==='Critical > 48h').length;
+  const cards=[['Actions',total],['Open',`${pct(open,total)}% (${open})`],['Closed',`${pct(closed,total)}% (${closed})`],['Critical',critical],['Critical >48h',overdue]];
+  cards.forEach((c,i)=>{ const x=10+i*55; pdf.setFillColor(248,250,252); pdf.roundedRect(x,y-8,48,18,2,2,'F'); pdf.setFontSize(7); pdf.setFont(undefined,'bold'); pdf.setTextColor(100,116,139); pdf.text(c[0],x+3,y-2); pdf.setFontSize(13); pdf.setTextColor(15,23,42); pdf.text(String(c[1]),x+3,y+6); }); y+=25;
+  const sections=[['Top issue themes', countBy(rows,a=>a.IssueTheme).slice(0,10)], ['SLA flags', countBy(rows,slaBucket)], ['Sector breakdown', countBy(rows,a=>a.Sector).slice(0,10)], ['Closure quality', countBy(rows,closureQuality)]];
+  sections.forEach((sec,idx)=>{ let x=10+(idx%2)*143; if(idx%2===0 && idx>0) y+=70; let yy=y; pdf.setFontSize(10); pdf.setFont(undefined,'bold'); pdf.setTextColor(0,168,142); pdf.text(sec[0],x,yy); yy+=6; pdf.setTextColor(15,23,42); sec[1].forEach(([n,c])=>{ pdf.setFontSize(7); pdf.text(pdfClean(n).slice(0,60),x,yy); pdf.text(String(c),x+125,yy,{align:'right'}); yy+=5; }); });
+  pdf.addPage(); drawPdfHeader(pdf,'Audit Action Detail',`${rows.length} filtered actions`); y=26;
+  rows.forEach((a,idx)=>{ y=pdfEnsure(pdf,y,24); pdf.setFillColor(idx%2?255:248, idx%2?255:250, idx%2?255:252); pdf.rect(8,y-4,281,23,'F'); pdf.setTextColor(15,23,42); pdf.setFontSize(7); pdf.setFont(undefined,'bold'); pdf.text(`${a.Store} • ${a.AreaManager} • ${a.Sector} • ${a.Status} • ${a.Critical==='Yes'?'Critical':'Non-critical'} • ${a.SLABucket}`,10,y); y+=5; y=pdfLine(pdf, `${a.IssueTheme}: ${a.Description || a.Question}`, 10, y, 190, 7, 'bold'); pdf.setFont(undefined,'normal'); pdf.text(`Responsible: ${pdfClean(a.PersonResponsible)||'—'} | Days: ${actionIsClosed(a)?fmtDays(a.DaysToClose):fmtDays(daysOpenNow(a))}`, 210, y-5); y+=2; });
+  pdf.save(`Birds_Audit_Action_Hub_${stamp}.pdf`);
+}
+async function exportAuditClosurePDF(){
+  const rows = (__auditHubCurrentRows || []).filter(a => actionIsClosed(a) || a.HowClosed || a.ExtraComment); if(!rows.length){ alert('No closure evidence rows in the current filter.'); return; }
+  if(typeof window.jspdf === 'undefined'){ alert('PDF library is still loading, please try again.'); return; }
+  const { jsPDF } = window.jspdf; const pdf = new jsPDF('p','mm','a4'); const stamp = new Date().toISOString().slice(0,10);
+  pdf.setFillColor(0,168,142); pdf.rect(0,0,210,18,'F'); pdf.setTextColor(255,255,255); pdf.setFontSize(15); pdf.setFont(undefined,'bold'); pdf.text('Closure Evidence Report',10,11); pdf.setFontSize(8); pdf.text(`${rows.length} rows • ${stamp}`,10,16); pdf.setTextColor(15,23,42);
+  let y=28; rows.forEach((a,idx)=>{ if(y>265){ pdf.addPage(); y=18; } pdf.setFillColor(248,250,252); pdf.roundedRect(8,y-5,194,38,2,2,'F'); pdf.setFontSize(9); pdf.setFont(undefined,'bold'); pdf.text(`${a.Store} • ${a.IssueTheme}`, 11, y); y+=5; y=pdfLine(pdf, `Issue: ${a.Description || a.Question}`, 11, y, 185, 7, 'normal'); y=pdfLine(pdf, `Action: ${a.ActionNeeded || '—'}`, 11, y, 185, 7, 'normal'); y=pdfLine(pdf, `Closed on: ${a.ClosedOn || '—'} | Days: ${fmtDays(a.DaysToClose)} | How closed: ${a.HowClosed || '—'} | Extra: ${a.ExtraComment || '—'}`, 11, y, 185, 7, 'normal'); y+=5; });
+  pdf.save(`Birds_Audit_Closure_Evidence_${stamp}.pdf`);
+}
+</script>
+
+
+<script>
+// ===== SECTIONAL REVIEW PACK =====
+// Company / Area Manager review pack that mirrors the existing app sections.
+let __reviewPackData = null;
+
+function rpEsc(v){ return String(v ?? '').replace(/[&<>'"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+function rpNum(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
+function rpPct(v){ return (rpNum(v)*100).toFixed(1)+'%'; }
+function rpMoney(v){ return '£'+rpNum(v).toFixed(0); }
+function rpAvg(arr, fn){ const vals=arr.map(fn).map(Number).filter(Number.isFinite); return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0; }
+function rpCountBy(arr, fn){ const m=new Map(); arr.forEach(x=>{const k=fn(x)||'Unknown'; m.set(k,(m.get(k)||0)+1);}); return Array.from(m.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]))); }
+function rpStoreId(name){ return canonicalStoreId(name || ''); }
+function rpAreaFromStore(store){ try { return safeGetAM(store) || 'Unassigned'; } catch(e){ return 'Unassigned'; } }
+function rpAreaOfKpi(k){ return k.AM || rpAreaFromStore(k.Branch); }
+function rpStoreNameAction(a){ return cleanStoreName(a.Store || a.StoreName || a['Store Name'] || (a.StoreEmail ? String(a.StoreEmail).split('@')[0] : '') || 'Unknown Store'); }
+function rpAreaAction(a){ const am = a.AreaManager || a.AM || rpAreaFromStore(rpStoreNameAction(a)); return am === 'Area Manager' ? rpAreaFromStore(rpStoreNameAction(a)) : am; }
+function rpStatus(a){ if(typeof normalizeActionStatus==='function') return normalizeActionStatus(a.Status); return String(a.Status||'').toLowerCase().includes('closed')?'Closed':'Open'; }
+function rpClosed(a){ return rpStatus(a)==='Closed'; }
+function rpCritical(a){ if(typeof normalizeYesNo==='function') return normalizeYesNo(a.Critical)==='Yes'; return ['yes','true','critical'].includes(String(a.Critical||'').toLowerCase()); }
+function rpTheme(a){ if(typeof auditIssueTheme==='function') return auditIssueTheme(a); return String(a.Description || a.Question || a.ActionNeeded || 'Uncategorised'); }
+function rpActionDays(a){ if(rpClosed(a)) return Number(a.DaysToClose); const d=parseDateSafe(a.AuditDate || a.Date); return d?Math.max(0,(new Date()-d)/86400000):Number(a.DaysOpen); }
+function rpSla(a){ if(typeof slaBucket==='function') return slaBucket(a); if(rpClosed(a)) return 'Closed'; const d=rpActionDays(a); if(rpCritical(a)&&d>2) return 'Critical > 48h'; if(d>30) return 'Open > 30 days'; if(d>14) return 'Open > 14 days'; if(d>7) return 'Open > 7 days'; return 'In SLA / New'; }
+function rpWeekRange(period, latestWeek){
+  if(period==='latest') return {from:latestWeek,to:latestWeek,prevFrom:latestWeek-1,prevTo:latestWeek-1,label:`Week ${latestWeek}`};
+  if(period==='last4') return {from:Math.max(1,latestWeek-3),to:latestWeek,prevFrom:Math.max(1,latestWeek-7),prevTo:latestWeek-4,label:`Weeks ${Math.max(1,latestWeek-3)}-${latestWeek}`};
+  if(period==='last13') return {from:Math.max(1,latestWeek-12),to:latestWeek,prevFrom:Math.max(1,latestWeek-25),prevTo:latestWeek-13,label:`Weeks ${Math.max(1,latestWeek-12)}-${latestWeek}`};
+  return {from:1,to:latestWeek,prevFrom:null,prevTo:null,label:`YTD Weeks 1-${latestWeek}`};
+}
+function rpFilterWeek(rows, range){ return rows.filter(r => (r.Week||0) >= range.from && (r.Week||0) <= range.to); }
+function rpFilterPrev(rows, range){ if(range.prevFrom==null) return []; return rows.filter(r => (r.Week||0) >= range.prevFrom && (r.Week||0) <= range.prevTo); }
+function rpScopeRows(scope, kpis, audits, actions){
+  if(scope==='ALL') return {kpis,audits,actions};
+  return {
+    kpis:kpis.filter(k=>rpAreaOfKpi(k)===scope),
+    audits:audits.filter(a=>rpAreaFromStore(a.Store)===scope),
+    actions:actions.filter(a=>rpAreaAction(a)===scope)
+  };
+}
+function rpAggStores(kpis, audits){
+  const m=new Map();
+  kpis.filter(k=>!k.IsAnomaly).forEach(k=>{
+    const id=rpStoreId(k.Branch); if(!m.has(id)) m.set(id,{id,Branch:k.Branch,AM:rpAreaOfKpi(k),rows:[],auditRows:[]});
+    m.get(id).rows.push(k);
+  });
+  audits.forEach(a=>{ const id=rpStoreId(a.Store); if(!m.has(id)) m.set(id,{id,Branch:a.Store,AM:rpAreaFromStore(a.Store),rows:[],auditRows:[]}); m.get(id).auditRows.push(a); });
+  return Array.from(m.values()).map(s=>{
+    const avg=(f)=>rpAvg(s.rows,r=>r[f]); const aud=(f)=>rpAvg(s.auditRows,r=>r[f]);
+    const obj={Branch:s.Branch,AM:s.AM,Sales:avg('Sales'),Product:avg('Product'),Waste:avg('Waste'),Labour:avg('Labour'),ATV:avg('ATV'),Energy:avg('Energy'),SalesActual:rpAvg(s.rows,r=>r.SalesActual || r.__rawSales || 0),AuditScore:aud('Score'),Food:aud('Food'),Fire:aud('Fire'),HandS:aud('HandS'),Journey:aud('Journey'),Coffee:aud('Coffee'),Focus:aud('Focus')};
+    obj.Score = typeof calculateStoreScore==='function' ? calculateStoreScore(obj) : (obj.Sales*100 + obj.Product*100 - obj.Waste*100 - obj.Labour*100);
+    return obj;
+  });
+}
+function rpKpi(label, value, sub='', colour='birds-green'){
+  return `<div class="card p-5 border-t-4 ${colour==='red'?'border-t-red-500':colour==='amber'?'border-t-amber-400':'border-t-birds-green'}"><div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${label}</div><div class="text-3xl font-black ${colour==='red'?'text-red-600':colour==='amber'?'text-amber-600':'birds-green'}">${value}</div><div class="text-xs font-bold text-slate-500 mt-1">${sub}</div></div>`;
+}
+function rpTrend(label, curr, prev, inverse=false, format='pct'){
+  const diff = curr - prev; const good = inverse ? diff < 0 : diff > 0; const arrow = diff===0?'—':diff>0?'▲':'▼';
+  const fmt = format==='money' ? '£'+Math.abs(diff).toFixed(2) : format==='whole' ? Math.abs(diff).toFixed(0) : (Math.abs(diff)*100).toFixed(1)+'%';
+  return `<div class="card p-4"><div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${label}</div><div class="text-2xl font-black text-slate-800">${format==='money'?rpMoney(curr):format==='whole'?Math.round(curr):rpPct(curr)}</div><div class="text-xs font-black ${diff===0?'text-slate-400':good?'text-emerald-600':'text-red-600'}">${arrow} ${diff===0?'No change':fmt} vs previous</div></div>`;
+}
+function rpBreakdown(title, pairs){ return `<div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">${title}</h3>${pairs.length?pairs.map(([n,c])=>`<div class="flex justify-between gap-3 py-2 border-b border-slate-100 last:border-0"><span class="text-xs font-bold text-slate-700">${rpEsc(n)}</span><span class="font-black birds-green">${c}</span></div>`).join(''):'<p class="text-slate-400 italic">No data.</p>'}</div>`; }
+function rpOpenClosed(title, rows){ return `<div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">${title}</h3>${rows.length?rows.map(x=>`<div class="mb-3"><div class="flex justify-between text-xs font-black"><span>${rpEsc(x.name)}</span><span>${x.open} open / ${x.closed} closed</span></div><div class="progress-bar"><div class="progress-fill-warn" style="width:${x.total?x.open/x.total*100:0}%"></div></div></div>`).join(''):'<p class="text-slate-400 italic">No data.</p>'}</div>`; }
+function rpOpenClosedRows(actions, fn){ const m=new Map(); actions.forEach(a=>{const k=fn(a)||'Unknown'; if(!m.has(k))m.set(k,{name:k,open:0,closed:0,total:0}); const o=m.get(k); o.total++; if(rpClosed(a))o.closed++; else o.open++;}); return Array.from(m.values()).sort((a,b)=>b.open-a.open||b.total-a.total).slice(0,12); }
+function rpBandStores(allStores, scopeStores){
+  const sorted=allStores.filter(s=>s.SalesActual>0).sort((a,b)=>b.SalesActual-a.SalesActual); const n=sorted.length||1; const bandMap=new Map();
+  sorted.forEach((s,i)=>{ const p=(i+1)/n; const band=p<=0.25?'A - High Sales':p<=0.5?'B - Upper Mid':p<=0.75?'C - Lower Mid':'D - Developing'; bandMap.set(rpStoreId(s.Branch),band); });
+  return scopeStores.map(s=>({...s,Band:bandMap.get(rpStoreId(s.Branch)) || 'No sales actual'})).sort((a,b)=>b.SalesActual-a.SalesActual);
+}
+async function rpBuild(scope, period){
+  const kAll=await idbGetAll('kpi'), aAll=await idbGetAll('audits'), actAll=await idbGetAll('actions'), sw=await idbGetAll('store_winners_log'), aw=await idbGetAll('area_winners_log');
+  const latestWeek=Math.max(1,...[...kAll.map(k=>k.Week),...aAll.map(a=>a.Week),...actAll.map(a=>a.Week)].filter(Boolean)); const range=rpWeekRange(period, latestWeek);
+  const curBase={kpis:rpFilterWeek(kAll,range), audits:rpFilterWeek(aAll,range), actions:rpFilterWeek(actAll,range)}; const prevBase={kpis:rpFilterPrev(kAll,range), audits:rpFilterPrev(aAll,range), actions:rpFilterPrev(actAll,range)};
+  const cur=rpScopeRows(scope,curBase.kpis,curBase.audits,curBase.actions); const prev=rpScopeRows(scope,prevBase.kpis,prevBase.audits,prevBase.actions);
+  const allStores=rpAggStores(curBase.kpis,curBase.audits); const stores=rpAggStores(cur.kpis,cur.audits);
+  const winners=sw.filter(w=>(w.Week||0)>=range.from && (w.Week||0)<=range.to).filter(w=>scope==='ALL'||rpAreaFromStore(w.Branch)===scope);
+  const areaWins=aw.filter(w=>(w.Week||0)>=range.from && (w.Week||0)<=range.to).filter(w=>scope==='ALL'||w.Winner===scope);
+  return {scope,period,range,cur,prev,allStores,stores,winners,areaWins,latestWeek};
+}
+async function renderReviewPack(){
+  const ams=new Set(); Array.from(storeMap.values()).forEach(v=>v&&v!=='Unassigned'&&ams.add(v)); (await idbGetAll('actions')).forEach(a=>{const am=rpAreaAction(a); if(am&&am!=='Unassigned')ams.add(am);});
+  const scope=document.getElementById('reviewScope')?.value||'ALL'; const period=document.getElementById('reviewPeriod')?.value||'latest';
+  document.getElementById('mainView').innerHTML=`<div id="review-pack" class="space-y-6"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><h2 class="text-[36px] font-black outfit birds-green uppercase tracking-tight">📘 Sectional Review Pack</h2><p class="text-slate-500 font-bold">Mirrors the core tabs: KPI trends, weekly report, podium / awards, network standings, audits and banding.</p></div><div class="flex flex-wrap gap-2 review-controls"><select id="reviewScope" onchange="refreshReviewPack()" class="input-chip text-sm"><option value="ALL">Company overview</option>${Array.from(ams).sort().map(a=>`<option value="${rpEsc(a)}">${rpEsc(a)}</option>`).join('')}</select><select id="reviewPeriod" onchange="refreshReviewPack()" class="input-chip text-sm"><option value="latest">Latest week</option><option value="last4">Last 4 weeks</option><option value="last13">Last 13 weeks</option><option value="ytd">Year to date</option></select><button onclick="exportReviewPackPDF()" class="btn-secondary">📄 PDF Review Pack</button><button onclick="exportReviewPackExcel()" class="btn-secondary">📊 Excel Pack</button></div></div><div id="reviewPackBody" class="space-y-6"></div></div>`;
+  document.getElementById('reviewScope').value=scope; document.getElementById('reviewPeriod').value=period; await refreshReviewPack();
+}
+async function refreshReviewPack(){
+  const scope=document.getElementById('reviewScope')?.value||'ALL'; const period=document.getElementById('reviewPeriod')?.value||'latest'; const d=await rpBuild(scope,period); window.__reviewPackData=d;
+  const cur=d.cur, prev=d.prev; const avg=(rows,f)=>rpAvg(rows.filter(r=>!r.IsAnomaly),r=>r[f]); const pavg=(f)=>avg(prev.kpis,f);
+  const stores=d.stores.sort((a,b)=>b.Score-a.Score); const allRank=d.allStores.slice().sort((a,b)=>b.Score-a.Score).map((s,i)=>({...s,NetworkRank:i+1})); const rankMap=new Map(allRank.map(s=>[rpStoreId(s.Branch),s.NetworkRank]));
+  const open=cur.actions.filter(a=>!rpClosed(a)).length, closed=cur.actions.filter(rpClosed).length, critical=cur.actions.filter(rpCritical).length;
+  const banded=rpBandStores(d.allStores,d.stores);
+  const medalRows=rpCountBy(d.winners,w=>w.Branch).slice(0,10);
+  const areaWinMsg=d.areaWins.length?`${d.areaWins.length} area podium win(s) in ${d.range.label}`:'No area podium wins in this period';
+  const weeklyRows=stores.map(s=>`<tr class="border-b border-slate-100"><td class="p-2 font-black">${rpEsc(s.Branch)}</td><td class="p-2">#${rankMap.get(rpStoreId(s.Branch))||'-'}</td><td class="p-2">${rpPct(s.Sales)}</td><td class="p-2">${rpPct(s.Product)}</td><td class="p-2">${rpPct(s.Waste)}</td><td class="p-2">${rpPct(s.Labour)}</td><td class="p-2">${s.AuditScore?s.AuditScore.toFixed(1)+'%':'—'}</td></tr>`).join('');
+  const bandRows=banded.map(s=>`<tr class="border-b border-slate-100"><td class="p-2 font-black">${rpEsc(s.Branch)}</td><td class="p-2">${rpMoney(s.SalesActual)}</td><td class="p-2 font-bold">${rpEsc(s.Band)}</td><td class="p-2">#${rankMap.get(rpStoreId(s.Branch))||'-'}</td></tr>`).join('');
+  document.getElementById('reviewPackBody').innerHTML=`<section class="space-y-4"><h3 class="text-xl font-black outfit birds-green uppercase">1. KPI trends vs previous period</h3><div class="grid grid-cols-1 md:grid-cols-6 gap-4">${rpTrend('Sales',avg(cur.kpis,'Sales'),pavg('Sales'))}${rpTrend('Product',avg(cur.kpis,'Product'),pavg('Product'))}${rpTrend('Waste',avg(cur.kpis,'Waste'),pavg('Waste'),true)}${rpTrend('Labour',avg(cur.kpis,'Labour'),pavg('Labour'),true)}${rpTrend('ATV',avg(cur.kpis,'ATV'),pavg('ATV'),'false','money')}${rpTrend('Energy',avg(cur.kpis,'Energy'),pavg('Energy'),true,'whole')}</div></section>
+  <section class="space-y-4"><h3 class="text-xl font-black outfit birds-green uppercase">2. Weekly report / store KPI view</h3><div class="card overflow-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50"><tr><th class="p-2">Store</th><th class="p-2">Network</th><th class="p-2">Sales</th><th class="p-2">Product</th><th class="p-2">Waste</th><th class="p-2">Labour</th><th class="p-2">Audit</th></tr></thead><tbody>${weeklyRows||'<tr><td class="p-4" colspan="7">No KPI rows for this selection.</td></tr>'}</tbody></table></div></section>
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-1">${rpBreakdown('3. Podium / store awards accrued', medalRows)}</div><div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">Area podium wins</h3><p class="font-black text-slate-800">${rpEsc(areaWinMsg)}</p>${d.areaWins.slice(0,8).map(w=>`<div class="text-xs font-bold text-slate-600 mt-2">Week ${w.Week}: ${rpEsc(w.Winner)} (${w.Score||''})</div>`).join('')}</div><div>${rpOpenClosed('Audit actions by store', rpOpenClosedRows(cur.actions,rpStoreNameAction))}</div></section>
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">4. Network standing</h3>${allRank.filter(s=>scope==='ALL'||s.AM===scope).slice(0,20).map(s=>`<div class="flex justify-between border-b border-slate-100 py-2 text-xs"><span class="font-black">#${s.NetworkRank} ${rpEsc(s.Branch)}</span><span>${rpPct(s.Sales)} sales • ${rpPct(s.Product)} product</span></div>`).join('')||'<p>No standings for selection.</p>'}</div><div class="card p-5"><h3 class="font-black outfit text-sm uppercase tracking-widest text-slate-400 mb-4">5. Audit breakdown</h3><div class="grid grid-cols-3 gap-3 mb-4"><div><div class="text-xs font-black text-slate-400">Open</div><div class="text-2xl font-black text-amber-600">${open}</div></div><div><div class="text-xs font-black text-slate-400">Closed</div><div class="text-2xl font-black birds-green">${closed}</div></div><div><div class="text-xs font-black text-slate-400">Critical</div><div class="text-2xl font-black text-red-600">${critical}</div></div></div>${rpCountBy(cur.actions,rpTheme).slice(0,8).map(([n,c])=>`<div class="flex justify-between py-2 border-b border-slate-100 text-xs"><span class="font-bold">${rpEsc(n)}</span><span class="font-black birds-green">${c}</span></div>`).join('')}</div></section>
+  <section class="space-y-4"><h3 class="text-xl font-black outfit birds-green uppercase">6. Financial banding results</h3><div class="card overflow-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50"><tr><th class="p-2">Store</th><th class="p-2">Avg actual sales</th><th class="p-2">Financial band</th><th class="p-2">Network rank</th></tr></thead><tbody>${bandRows||'<tr><td class="p-4" colspan="4">No actual sales data for this selection.</td></tr>'}</tbody></table></div></section>`;
+}
+async function exportReviewPackExcel(){
+  const d=window.__reviewPackData || await rpBuild(document.getElementById('reviewScope')?.value||'ALL',document.getElementById('reviewPeriod')?.value||'latest'); const wb=XLSX.utils.book_new();
+  const stores=rpAggStores(d.cur.kpis,d.cur.audits); const allRank=d.allStores.slice().sort((a,b)=>b.Score-a.Score).map((s,i)=>({...s,NetworkRank:i+1})); const rmap=new Map(allRank.map(s=>[rpStoreId(s.Branch),s.NetworkRank])); const banded=rpBandStores(d.allStores,stores);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Scope:d.scope,Period:d.range.label,KPIRows:d.cur.kpis.length,AuditRows:d.cur.audits.length,ActionRows:d.cur.actions.length,OpenActions:d.cur.actions.filter(a=>!rpClosed(a)).length,Critical:d.cur.actions.filter(rpCritical).length}]),'Summary');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(stores.map(s=>({Store:s.Branch,Area:s.AM,NetworkRank:rmap.get(rpStoreId(s.Branch)),Sales:rpPct(s.Sales),Product:rpPct(s.Product),Waste:rpPct(s.Waste),Labour:rpPct(s.Labour),Audit:s.AuditScore?s.AuditScore.toFixed(1)+'%':''}))), 'Weekly KPI');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d.winners.map(w=>({Week:w.Week,Store:w.Branch,Metric:w.Metric}))), 'Awards');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d.cur.actions.map(a=>({Area:rpAreaAction(a),Store:rpStoreNameAction(a),Theme:rpTheme(a),Status:rpStatus(a),Critical:rpCritical(a)?'Yes':'No',SLA:rpSla(a),Description:a.Description,Action:a.ActionNeeded,HowClosed:a.HowClosed,ExtraComment:a.ExtraComment}))), 'Audit Actions');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(banded.map(s=>({Store:s.Branch,AvgActualSales:s.SalesActual,Band:s.Band,NetworkRank:rmap.get(rpStoreId(s.Branch))}))), 'Financial Banding');
+  XLSX.writeFile(wb,`Birds_Sectional_Review_${d.scope}_${d.period}_${new Date().toISOString().slice(0,10)}.xlsx`.replace(/[^a-z0-9_.-]+/gi,'_'));
+}
+async function exportReviewPackPDF(){
+  const card=document.getElementById('review-pack'); if(!card){alert('Open Review Pack first.');return;} if(typeof html2canvas==='undefined'||typeof window.jspdf==='undefined'){alert('PDF libraries still loading.');return;}
+  const controls=card.querySelectorAll('.review-controls,button'); const restore=[]; controls.forEach(el=>{restore.push([el,el.style.display]); el.style.display='none';});
+  const expand=card.querySelectorAll('.overflow-auto,.overflow-y-auto,[class*="max-h-"]'); const rs=[]; expand.forEach(el=>{rs.push([el,el.style.overflow,el.style.maxHeight,el.style.height]); el.style.overflow='visible'; el.style.maxHeight='none'; el.style.height='auto';});
+  await new Promise(r=>requestAnimationFrame(()=>r())); const canvas=await html2canvas(card,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:Math.max(card.scrollWidth,1500)});
+  restore.forEach(([el,d])=>el.style.display=d); rs.forEach(([el,o,m,h])=>{el.style.overflow=o;el.style.maxHeight=m;el.style.height=h;});
+  const {jsPDF}=window.jspdf; const pdf=new jsPDF('l','mm','a4'); const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight(); const imgW=pw-12, sliceH=Math.floor(canvas.width*(ph-12)/imgW); const pageCanvas=document.createElement('canvas'); const ctx=pageCanvas.getContext('2d'); pageCanvas.width=canvas.width; pageCanvas.height=sliceH; let y=0,p=0; while(y<canvas.height){ctx.clearRect(0,0,pageCanvas.width,pageCanvas.height);ctx.drawImage(canvas,0,y,canvas.width,sliceH,0,0,canvas.width,sliceH); if(p>0)pdf.addPage(); pdf.addImage(pageCanvas.toDataURL('image/png'),'PNG',6,6,imgW,ph-12); y+=sliceH;p++;}
+  pdf.save(`Birds_Sectional_Review_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+</script>
+
 </body>
 </html>
