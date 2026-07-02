@@ -3252,6 +3252,219 @@ async function exportFullStoreReport() {
     pdf.save('Store_Report_' + storeName.replace(/\s+/g, '_') + '.pdf');
 }
 </script>
+
+<script>
+
+// ===== FULL PAGE PNG EXPORT =====
+
+
+// ===== CLEAN AUDIT SNAPSHOT EXPORT =====
+
+async function exportCurrentViewPNG(){
+
+    const body = document.getElementById('auditReportBody');
+
+    if(!body){
+        alert('auditReportBody not found');
+        return;
+    }
+
+    const exportWrap = document.createElement('div');
+
+    exportWrap.style.position='absolute';
+    exportWrap.style.left='-99999px';
+    exportWrap.style.top='0';
+    exportWrap.style.background='#fff';
+    exportWrap.style.padding='30px';
+    exportWrap.style.width='1400px';
+
+    const store =
+        document.getElementById('auditStoreFilter')?.value ||
+        'ALL_STORES';
+
+    const area =
+        document.getElementById('auditAreaFilter')?.value ||
+        'ALL_AREAS';
+
+    const sector =
+        document.getElementById('auditSectorFilter')?.value ||
+        'ALL_SECTORS';
+
+    exportWrap.innerHTML = `
+        <div style="
+            border-bottom:4px solid #00A88E;
+            margin-bottom:20px;
+            padding-bottom:15px;
+            font-family:Arial,sans-serif;
+        ">
+            <div style="
+                font-size:42px;
+                font-weight:900;
+                color:#00A88E;
+            ">
+                AUDIT ACTION HUB
+            </div>
+
+            <div style="
+                margin-top:10px;
+                font-size:18px;
+                line-height:1.8;
+            ">
+                <strong>Store:</strong> ${store}<br>
+                <strong>Area:</strong> ${area}<br>
+                <strong>Sector:</strong> ${sector}<br>
+                <strong>Generated:</strong>
+                ${new Date().toLocaleString()}
+            </div>
+        </div>
+    `;
+
+    const clone = body.cloneNode(true);
+
+    exportWrap.appendChild(clone);
+
+    document.body.appendChild(exportWrap);
+
+    //
+    // EXPAND EVERYTHING
+    //
+    exportWrap.querySelectorAll('*').forEach(el => {
+
+        try{
+
+            const style =
+                window.getComputedStyle(el);
+
+            if(
+                style.overflow === 'auto' ||
+                style.overflow === 'scroll' ||
+                style.overflowY === 'auto' ||
+                style.overflowY === 'scroll'
+            ){
+                el.style.overflow='visible';
+                el.style.overflowY='visible';
+            }
+
+            if(style.maxHeight !== 'none'){
+                el.style.maxHeight='none';
+            }
+
+            if(style.height &&
+               style.height !== 'auto'){
+                el.style.height='auto';
+            }
+
+        }catch(e){}
+    });
+
+    await new Promise(r=>setTimeout(r,1200));
+
+    const canvas = await html2canvas(exportWrap,{
+        scale:2,
+        useCORS:true,
+        backgroundColor:'#ffffff'
+    });
+
+    console.log(
+        'FINAL CANVAS SIZE',
+        canvas.width,
+        canvas.height
+    );
+
+    const PAGE_HEIGHT = 3000;
+
+    const totalPages =
+        Math.ceil(
+            canvas.height / PAGE_HEIGHT
+        );
+
+    const safeStore =
+        String(store)
+            .replace(/[^a-z0-9]/gi,'_');
+
+    const dateStamp =
+        new Date()
+            .toISOString()
+            .slice(0,10);
+
+    const zip = new JSZip();
+
+    for(let page=0; page<totalPages; page++){
+
+        const pageCanvas =
+            document.createElement('canvas');
+
+        const sliceHeight =
+            Math.min(
+                PAGE_HEIGHT,
+                canvas.height -
+                page * PAGE_HEIGHT
+            );
+
+        pageCanvas.width =
+            canvas.width;
+
+        pageCanvas.height =
+            sliceHeight;
+
+        pageCanvas
+            .getContext('2d')
+            .drawImage(
+                canvas,
+                0,
+                page * PAGE_HEIGHT,
+                canvas.width,
+                sliceHeight,
+                0,
+                0,
+                canvas.width,
+                sliceHeight
+            );
+
+        const pageName =
+            'P' +
+            String(page + 1)
+                .padStart(2,'0') +
+            '.png';
+
+        zip.file(
+            pageName,
+            pageCanvas
+                .toDataURL('image/png')
+                .split(',')[1],
+            {
+                base64:true
+            }
+        );
+    }
+
+    const blob =
+        await zip.generateAsync({
+            type:'blob'
+        });
+
+    const a =
+        document.createElement('a');
+
+    a.href =
+        URL.createObjectURL(blob);
+
+    a.download =
+        safeStore +
+        '_Audit_Action_Hub_' +
+        dateStamp +
+        '.zip';
+
+    a.click();
+
+    exportWrap.remove();
+}
+
+
+
+
+</script>
+
 </body>
 </html>
 
@@ -3436,7 +3649,7 @@ async function renderAuditActionHub(){
   const stores = [...new Set(__auditHubCache.map(a=>a.Store))].sort();
   const themes = [...new Set(__auditHubCache.map(a=>a.IssueTheme))].sort();
   const slas = ['Critical > 48h','Open > 30 days','Open > 14 days','Open > 7 days','In SLA / New','Closed'];
-  document.getElementById('mainView').innerHTML = `<div id="audit-export-card" class="space-y-6"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><h2 class="text-[36px] font-black outfit birds-green uppercase tracking-tight">🧾 Audit Action Hub</h2><p class="text-slate-500 font-bold">Time filters, SLA flags, issue drill-down and closure evidence review.</p></div><div class="flex flex-wrap gap-2 audit-export-controls"><button onclick="exportAuditActions('filtered')" class="btn-primary">⬇️ Export Current Filter</button><button onclick="exportAuditActions('full')" class="btn-secondary">📦 Full Export</button><button onclick="exportAuditPDF()" class="btn-secondary">📄 PDF Summary</button><button onclick="exportAuditCurrentViewPDF()" class="btn-secondary">🖨️ Current View PDF</button><button onclick="exportAuditClosurePDF()" class="btn-secondary">📑 Closure Detail PDF</button></div></div>
+  document.getElementById('mainView').innerHTML = `<div id="audit-export-card" class="space-y-6"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><h2 class="text-[36px] font-black outfit birds-green uppercase tracking-tight">🧾 Audit Action Hub</h2><p class="text-slate-500 font-bold">Time filters, SLA flags, issue drill-down and closure evidence review.</p></div><div class="flex flex-wrap gap-2 audit-export-controls"><button onclick="exportAuditActions('filtered')" class="btn-primary">⬇️ Export Current Filter</button><button onclick="exportAuditActions('full')" class="btn-secondary">📦 Full Export</button><button onclick="exportAuditPDF()" class="btn-secondary">📄 PDF Summary</button><button onclick="exportCurrentViewPNG()" class="btn-secondary">🖼️ Current View PNG</button><button onclick="exportAuditClosurePDF()" class="btn-secondary">📑 Closure Detail PDF</button></div></div>
     <div class="card p-5 audit-export-controls"><div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3"><select id="auditPeriodFilter" onchange="toggleAuditCustomDates();refreshAuditHubBody()" class="input-chip text-sm"><option value="all">All dates</option><option value="last7">Last 7 days</option><option value="last30">Last 30 days</option><option value="mtd">Month to date</option><option value="prevmonth">Previous month</option><option value="qtd">Quarter to date</option><option value="ytd">Year to date</option><option value="custom">Custom dates</option></select><select id="auditAreaFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Areas</option>${areas.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}</select><select id="auditSectorFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Sectors</option>${sectors.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select><select id="auditCategoryFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Categories</option>${categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select><select id="auditStoreFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Stores</option>${stores.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select><select id="auditStatusFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">Open & Closed</option><option value="Open">Open</option><option value="Closed">Closed</option></select><select id="auditCriticalFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Criticality</option><option value="Yes">Critical only</option><option value="No">Non-critical only</option></select><select id="auditSlaFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All SLA</option>${slas.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3"><select id="auditThemeFilter" onchange="refreshAuditHubBody()" class="input-chip text-sm"><option value="ALL">All Issue Themes</option>${themes.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select><input id="auditSearch" oninput="refreshAuditHubBody()" class="input-chip text-sm" placeholder="Search issue, question, closure comment..." /><div id="auditCustomDates" class="hidden grid grid-cols-2 gap-2"><input id="auditFromDate" type="date" onchange="refreshAuditHubBody()" class="input-chip text-sm"/><input id="auditToDate" type="date" onchange="refreshAuditHubBody()" class="input-chip text-sm"/></div></div></div><div id="auditReportBody" class="space-y-6"></div><div id="auditDrilldownPanel" class="hidden"></div></div>`;
   refreshAuditHubBody();
 }
@@ -3782,6 +3995,16 @@ windowWidth:Math.max(card.scrollWidth,1500)});
   const {jsPDF}=window.jspdf; const pdf=new jsPDF('l','mm','a4'); const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight(); const imgW=pw-12, sliceH=Math.floor(canvas.width*(ph-12)/imgW); const pageCanvas=document.createElement('canvas'); const ctx=pageCanvas.getContext('2d'); pageCanvas.width=canvas.width; pageCanvas.height=sliceH; let y=0,p=0; while(y<canvas.height){ctx.clearRect(0,0,pageCanvas.width,pageCanvas.height);ctx.drawImage(canvas,0,y,canvas.width,sliceH,0,0,canvas.width,sliceH); if(p>0)pdf.addPage(); pdf.addImage(pageCanvas.toDataURL('image/png'),'PNG',6,6,imgW,ph-12); y+=sliceH;p++;}
   pdf.save(`Birds_Sectional_Review_${new Date().toISOString().slice(0,10)}.pdf`);
 }
+</script>
+
+
+<script>
+
+// ===== FULL PAGE PNG EXPORT =====
+
+// REMOVED DUPLICATE PNG EXPORTER
+
+
 </script>
 
 </body>
