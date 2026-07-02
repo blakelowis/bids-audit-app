@@ -3215,226 +3215,304 @@ async function drawRankMovementChart(storeName, canvasId) {
   });
 }
 
+
 async function exportFullStoreReport() {
+    let storeName = document.getElementById('exportStoreSelect')?.value;
+    if (!storeName) {
+        alert('Select a store');
+        return;
+    }
 
-  let storeName = document.getElementById('exportStoreSelect')?.value;
-  if (!storeName) { alert('Select a store from the dropdown'); return; }
-  if (!storeName) return;
+    const { jsPDF } = window.jspdf;
+    
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const wait = (t = 800) => new Promise(r => setTimeout(r, t));
 
-  const { jsPDF } = window.jspdf;
+    const storeId = canonicalStoreId(storeName);
+    const executiveSummary = [];
 
-  const wait = (t=800) => new Promise(r => setTimeout(r, t));
-  const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+    const MINT = [84, 200, 170];
+    const CHARCOAL = [55, 55, 55];
+    const LIGHT_GREY = [120, 120, 120];
 
-  const storeId = canonicalStoreId(storeName);
+    const PAGE_WIDTH = 210;
+    const PAGE_CENTER_X = 105;
 
-  const rawAll = await idbGetAll('kpi');
-  const match = rawAll.find(r => canonicalStoreId(r.Branch) === canonicalStoreId(storeName));
-  if(match){ storeName = match.Branch; }
+    /* ==================================================
+       COVER PAGE (Scorecard + Rank Timeline)
+       ================================================== */
+    setView('storecards');
+    await wait(900);
 
+    const card = [...document.querySelectorAll('[id^="card-"]')]
+        .find(c => canonicalStoreId(c.innerText).includes(storeId));
 
-  // =========================
-  // PAGE 1 — LANDSCAPE (STORE CARD)
-  // =========================
-  let pdf = new jsPDF('l', 'mm', 'a4'); // ✅ LANDSCAPE
+    // Headers
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.setTextColor(...CHARCOAL);
+    pdf.text('Store Performance Report', PAGE_CENTER_X, 22, { align: 'center' });
 
-  setView('storecards');
-  await wait(900);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(36);
+    pdf.setTextColor(...MINT);
+    pdf.text(storeName, PAGE_CENTER_X, 36, { align: 'center' });
 
-  
-  const allCards = document.querySelectorAll('[id^="card-"]');
-  let card = Array.from(allCards).find(c =>
-    canonicalStoreId(c.innerText).includes(canonicalStoreId(storeName))
-  );
-  if (!card) {
-    card = Array.from(allCards)[0] || null;
-  }
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    pdf.setTextColor(...LIGHT_GREY);
+    const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    pdf.text(`Generated: ${dateStr}`, PAGE_CENTER_X, 45, { align: 'center' });
 
+    pdf.setDrawColor(225, 225, 225);
+    pdf.setLineWidth(0.5);
+    pdf.line(20, 52, 190, 52);
 
-  pdf.setFontSize(16);
-  pdf.text('Store Performance Report', 10, 12);
-  pdf.setFontSize(10);
-  pdf.text(storeName.toUpperCase(), 10, 18);
+    let finalY = 60;
 
-  if (card) {
-    const canvas = await renderElementToCanvas(card, { forceWidth: 1800 });
+    // 1. Draw Scorecard
+    if (card) {
+        const canvas = await renderElementToCanvas(card, { forceWidth: 1200 });
+        const ratio = canvas.height / canvas.width;
+        
+        const maxWidth = 175; 
+        const height = maxWidth * ratio;
+        const xPos = (PAGE_WIDTH - maxWidth) / 2;
 
-    const ratio = canvas.height / canvas.width;
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', xPos, finalY, maxWidth, height);
+        finalY += height + 15; // Shift Y down for the next element
+    }
 
-    const width = 277;  // ✅ full landscape width
-    const height = width * ratio;
+    // 2. Draw Rank Movement Chart directly underneath
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.id = 'rankChartTemp';
+    tempCanvas.width = 900;
+    tempCanvas.height = 320; // Adjusted aspect ratio to ensure it fits the remaining A4 space perfectly
+    document.body.appendChild(tempCanvas);
 
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 22, width, height);
-  }
+    await drawRankMovementChart(storeName, 'rankChartTemp');
+    await wait(400);
 
-  // =========================
-  // SWITCH TO PORTRAIT FOR REST
-  // =========================
-  pdf.addPage('p'); // ✅ switch orientation
-  let y = 18;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(...CHARCOAL);
+    pdf.text('Rank Movement Timeline', PAGE_CENTER_X, finalY, { align: 'center' });
+    
+    finalY += 5;
 
-  // =========================
-  // PAGE 2+ — TRENDS (CLEAN + AVG LINE FIXED)
-  // =========================
-  setView('trends');
-  await wait(900);
+    const rmChartWidth = 170;
+    const rmChartHeight = rmChartWidth * (tempCanvas.height / tempCanvas.width);
+    const rmChartX = (PAGE_WIDTH - rmChartWidth) / 2;
 
-  const metrics = [
-    'Sales','Product','Waste','Labour','ATV','Energy',
-    'HotBev','HotRolls','FilledRolls','Sandwiches'
-  ];
+    pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', rmChartX, finalY, rmChartWidth, rmChartHeight);
+    tempCanvas.remove();
 
-  for (let i = 0; i < metrics.length; i++) {
-    try {
+    /* ==================================================
+       TREND PAGES
+       ================================================== */
+    pdf.addPage('p'); 
+
+    let y = 18;
+    setView('trends');
+    await wait(900);
+
+    const metrics = [
+        'Sales', 'Product', 'Waste', 'Labour', 'ATV', 
+        'Energy', 'HotBev', 'HotRolls', 'FilledRolls', 'Sandwiches'
+    ];
+    const costMetrics = ['Waste', 'Labour', 'Energy'];
+
+    for (let i = 0; i < metrics.length; i++) {
         if (i > 0 && i % 2 === 0) {
             pdf.addPage('p');
             y = 18;
         }
 
-        const metricSel = document.getElementById('trendMetric');
-        if (metricSel) metricSel.value = metrics[i];
-
-        const storeDropdown = document.getElementById('trendStoreFilter');
-        if (storeDropdown) storeDropdown.value = storeName;
-
-        const scopeDropdown = document.getElementById('trendScope');
-        if (scopeDropdown) 
+        document.getElementById('trendMetric').value = metrics[i];
+        document.getElementById('trendStoreFilter').value = storeName;
 
         await drawTrendChart(true);
-        await new Promise(r => setTimeout(r, 400));
+        await wait(400);
 
-        const baseCanvas = document.getElementById('trendCanvas');
-        if (!baseCanvas) continue;
+        const c = document.getElementById('trendCanvas');
+        if (!c) continue;
 
-        const dataURL = baseCanvas.toDataURL('image/png');
-        const ratio = baseCanvas.height / baseCanvas.width;
-        const width = 180;
-        const height = width * ratio;
+        const chartWidth = 176;
+        const chartHeight = chartWidth * (c.height / c.width);
 
-        pdf.setFontSize(10);
-        drawSectionHeader(pdf, metrics[i] + ' Performance', y); y += 6;
+        const boxX = 13;
+        const boxWidth = 184;
 
-        
-        pdf.rect(10, y+2, width, height+2);
-pdf.addImage(dataURL, 'PNG', 10, y + 2, width, height);
-        try{
-          const chart = trendChartInstance;
-          if(chart && chart.data.datasets.length>=2){
-            const storeData = chart.data.datasets[0].data;
-            const compData = chart.data.datasets[1].data;
-            const inverse = ['Waste','Labour','Energy'].includes(metrics[i]);
-            const summary = calculateTrendSummary(storeData, compData, inverse);
-            const textY = y + height + 10;
-            pdf.setFontSize(9);
-            pdf.setFillColor(245,245,245); pdf.rect(10, y + height + 6, 180, 10, 'F'); pdf.setFontSize(9); pdf.text(`Under Avg: ${summary.under}%  |  Within 1%: ${summary.near}%  |  Above Avg: ${summary.above}%`, 10, textY);
-          }
-        }catch(e){}
+        pdf.setFillColor(248, 248, 248);
+        pdf.roundedRect(boxX, y - 7, boxWidth, chartHeight + 30, 4, 4, 'F');
 
+        pdf.setDrawColor(220, 220, 220);
+        pdf.roundedRect(boxX, y - 7, boxWidth, chartHeight + 30, 4, 4);
 
-        y += height + 16;
+        pdf.setFillColor(...MINT);
+        pdf.roundedRect(boxX, y - 7, boxWidth, 8, 4, 4, 'F');
 
-    } catch(e) {
-        console.log('Trend export skipped:', metrics[i], e);
-        continue;
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+
+        pdf.text(metrics[i].toUpperCase() + ' PERFORMANCE', PAGE_CENTER_X, y - 1, { align: 'center' });
+
+        pdf.addImage(c.toDataURL('image/png'), 'PNG', 17, y, chartWidth, chartHeight);
+
+        try {
+            const inverse = costMetrics.includes(metrics[i]);
+            const storeData = trendChartInstance.data.datasets[0].data;
+            const compData = trendChartInstance.data.datasets[1].data;
+            const s = calculateTrendSummary(storeData, compData, inverse);
+
+            const good = inverse ? s.under : s.above;
+            const bad = inverse ? s.above : s.under;
+
+            executiveSummary.push({ metric: metrics[i], good, near: s.near, bad, inverse });
+
+            pdf.setFontSize(8);
+
+            pdf.setFillColor(225, 245, 234);
+            pdf.roundedRect(17, y + chartHeight + 5, 52, 10, 2, 2, 'F');
+            pdf.setTextColor(0, 140, 90);
+            pdf.text((inverse ? 'Below Avg ' : 'Above Avg ') + good + '%', 20, y + chartHeight + 11);
+
+            pdf.setFillColor(225, 236, 255);
+            pdf.roundedRect(79, y + chartHeight + 5, 52, 10, 2, 2, 'F');
+            pdf.setTextColor(52, 120, 246);
+            pdf.text('Within 1% ' + s.near + '%', 82, y + chartHeight + 11);
+
+            pdf.setFillColor(255, 235, 235);
+            pdf.roundedRect(141, y + chartHeight + 5, 52, 10, 2, 2, 'F');
+            pdf.setTextColor(190, 50, 50);
+            pdf.text((inverse ? 'Above Avg ' : 'Below Avg ') + bad + '%', 144, y + chartHeight + 11);
+
+        } catch (e) {}
+
+        y += chartHeight + 24;
+
+        pdf.setDrawColor(230, 230, 230);
+        pdf.line(15, y - 8, 195, y - 8);
+
+        y += 8;
     }
-}
 
-// =========================
+    /* ==================================================
+       KPI SUMMARY PAGE (Centered Coaching Text)
+       ================================================== */
+    pdf.addPage('p');
 
-// ===== RANK MOVEMENT PAGE =====
-pdf.addPage('p');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(20);
+    pdf.setTextColor(...CHARCOAL);
+    pdf.text('Executive KPI Summary', PAGE_CENTER_X, 20, { align: 'center' });
 
-const tempCanvas = document.createElement('canvas');
-tempCanvas.id = 'rankChartTemp';
-tempCanvas.width = 900;
-tempCanvas.height = 400;
-document.body.appendChild(tempCanvas);
+    const health = Math.round(
+        executiveSummary.reduce((a, b) => a + b.good, 0) /
+        Math.max(executiveSummary.length, 1)
+    );
 
-await drawRankMovementChart(storeName, 'rankChartTemp');
-await new Promise(r => setTimeout(r, 400));
+    let rating = 'NEEDS FOCUS';
+    if (health >= 80) rating = 'EXCELLENT';
+    else if (health >= 65) rating = 'STRONG';
+    else if (health >= 50) rating = 'STABLE';
 
-const img = tempCanvas.toDataURL('image/png');
+    const healthBoxWidth = 120;
+    const healthBoxX = (PAGE_WIDTH - healthBoxWidth) / 2;
 
-// Rank summary
-const timeline = await buildRankTimeline(storeName);
-let summaryText = 'No rank data found (check store matching)';
-if(timeline.length){
-  pdf.text('', 150, 20);
-  const first = timeline[0].rank;
-  const last = timeline[timeline.length-1].rank;
-  const diff = first - last;
-  const change = diff > 0 ? `Improved +${diff}` : diff < 0 ? `Down ${Math.abs(diff)}` : 'No Change';
-  summaryText = `Start #${first} | Latest #${last} | ${change}`;
-}
+    pdf.setFillColor(...MINT);
+    pdf.roundedRect(healthBoxX, 35, healthBoxWidth, 40, 5, 5, 'F');
 
-pdf.setFontSize(14);
-pdf.text('Rank Movement Timeline', 10, 20);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(34);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(String(health) + '%', PAGE_CENTER_X, 55, { align: 'center' });
 
-if(summaryText){
-  pdf.setFontSize(11);
-  pdf.setTextColor(40,40,40);
-  pdf.text(summaryText, 10, 28);
-}
+    pdf.setFontSize(12);
+    pdf.text(rating, PAGE_CENTER_X, 65, { align: 'center' });
 
-pdf.addImage(img, 'PNG', 10, 32, 180, 90);
-pdf.setFontSize(9);
-pdf.text('Trend shows movement vs company baseline (dashed line)', 10, 125);
+    pdf.setFontSize(9);
+    pdf.text('Overall KPI Health', PAGE_CENTER_X, 71, { align: 'center' });
 
-tempCanvas.remove();
+    // Center-Aligned Coaching Text
+    let sy = 100;
 
-// FINAL PAGE — MEDALS
-  // =========================
-  pdf.addPage('p');
+    // Top Strengths
+    pdf.setTextColor(...CHARCOAL);
+    pdf.setFontSize(14);
+    pdf.text('Top Strengths', PAGE_CENTER_X, sy, { align: 'center' });
+    sy += 10;
 
-  setView('halloffame');
-  await wait(900);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    const strengths = executiveSummary.sort((a, b) => b.good - a.good).slice(0, 3);
+    
+    if (strengths.length > 0) {
+        strengths.forEach(x => {
+            pdf.setTextColor(0, 150, 90);
+            pdf.text(`• ${x.metric} - ${x.good}% outperforming company average`, PAGE_CENTER_X, sy, { align: 'center' });
+            sy += 8;
+        });
+    } else {
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('No significant strengths identified this period.', PAGE_CENTER_X, sy, { align: 'center' });
+        sy += 8;
+    }
 
-  const rows = Array.from(document.querySelectorAll('#ytd-card tbody tr'));
+    sy += 10;
+    
+    // Clean Divider Line
+    pdf.setDrawColor(230, 230, 230);
+    pdf.line(55, sy, 155, sy);
+    sy += 15;
 
-  const rowNode = rows.find(tr =>
-    canonicalStoreId(tr.innerText).includes(storeId)
-  );
+    // Priority Focus Areas
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...CHARCOAL);
+    pdf.text('Priority Focus Areas', PAGE_CENTER_X, sy, { align: 'center' });
+    sy += 10;
 
-  pdf.setFontSize(14);
-  pdf.text('Awards & Recognition', 10, 20);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    const weaknesses = executiveSummary.sort((a, b) => b.bad - a.bad).slice(0, 5);
 
-  if (rowNode) {
-    const canvas = await renderElementToCanvas(rowNode, { forceWidth: 1000 });
+    if (weaknesses.length > 0) {
+        weaknesses.forEach(x => {
+            pdf.setTextColor(190, 50, 50);
+            let focus = ['Waste', 'Labour', 'Energy'].includes(x.metric)
+                ? `${x.metric} above company average in ${x.bad}% of weeks`
+                : `${x.metric} below company average in ${x.bad}% of weeks`;
+            pdf.text(`• ${focus}`, PAGE_CENTER_X, sy, { align: 'center' });
+            sy += 8;
+        });
+    } else {
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('No significant focus areas identified this period.', PAGE_CENTER_X, sy, { align: 'center' });
+        sy += 8;
+    }
 
-    const ratio = canvas.height / canvas.width;
+    /* ==================================================
+       FOOTERS 
+       ================================================== */
+    const totalPages = pdf.internal.getNumberOfPages();
 
-    const width = 190;
-    const height = width * ratio;
+    for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
 
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 30, width, height);
-  // === WEEKLY MEDALS PATCH ===
-  const allWins = await idbGetAll('store_winners_log');
-  const storeWins = allWins
-    .filter(w => canonicalStoreId(w.Branch) === storeId)
-    .sort((a,b) => a.Week - b.Week);
+        pdf.setDrawColor(225, 225, 225);
+        pdf.line(15, 285, 195, 285);
 
-  let medalLines = {};
-  storeWins.forEach(w => {
-    if(!medalLines[w.Week]) medalLines[w.Week] = [];
-    medalLines[w.Week].push(w.Metric);
-  });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(130, 130, 130);
 
-  let textY = 30 + height + 10;
-  pdf.setFontSize(9);
-  pdf.text('Weekly Medals:', 10, textY);
-  textY += 6;
+        pdf.text('Birds Bakery Executive Reporting', 15, 290);
+        pdf.text('Page ' + p + ' of ' + totalPages, 195, 290, { align: 'right' });
+    }
 
-  Object.entries(medalLines).forEach(([wk, medals]) => {
-    const line = `Wk ${wk}: ${medals.join(', ')}`;
-    pdf.text(line, 10, textY);
-    textY += 5;
-  });
-
-  } else {
-    pdf.text('No KPI awards recorded.', 10, 30);
-  }
-
-  pdf.save('Store_Report_' + storeName.replace(/\s+/g, '_') + '.pdf');
+    pdf.save('Store_Report_' + storeName.replace(/\s+/g, '_') + '.pdf');
 }
 </script>
 </body>
